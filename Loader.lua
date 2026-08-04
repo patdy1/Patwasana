@@ -41,3 +41,27 @@ RemoveTexturesButKeepDecalsAndGuis(Workspace)
 Workspace.DescendantAdded:Connect(function(obj)
     RemoveTexturesButKeepDecalsAndGuis(obj)
 end)
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "DiscordCopy"
+Gui.ResetOnSpawn = false
+pcall(function()
+    Gui.Parent = game:GetService("CoreGui")
+end)
+
+local Button = Instance.new("TextButton")
+Button.Parent = Gui
+Button.Size = UDim2.new(0, 150, 0, 40)
+Button.Position = UDim2.new(1, -170, 1, -60) -- มุมขวาล่าง
+Button.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+Button.Text = "Discord"
+Button.TextScaled = true
+Button.BorderSizePixel = 0
+
+Button.MouseButton1Click:Connect(function()
+    if setclipboard then
+        setclipboard("https://discord.gg/v7VGZEdfgC")
+    elseif toclipboard then
+        toclipboard("https://discord.gg/v7VGZEdfgC")
+    end
+end)
