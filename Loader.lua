@@ -48,187 +48,171 @@ pcall(function()
     Gui.Parent = game:GetService("CoreGui")
 end)
 
---// =========================
---// Copy Discord Card (iOS Style)
---// วางต่อท้ายสคริปต์เดิมได้เลย
---// =========================
+GitHub Copilot Chat Assistant
 
+--// Responsive Roblox UI Template
+--// Mobile + PC Support
+
+local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
-local StarterGui = game:GetService("StarterGui")
-local UIS = game:GetService("UserInputService")
-local CoreGui = game:GetService("CoreGui")
 
-pcall(function()
-	if CoreGui:FindFirstChild("DiscordCopyCard") then
-		CoreGui.DiscordCopyCard:Destroy()
-	end
-end)
+local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
-local Gui = Instance.new("ScreenGui")
-Gui.Name = "DiscordCopyCard"
-Gui.ResetOnSpawn = false
-Gui.IgnoreGuiInset = true
-Gui.Parent = CoreGui
+-- ลบ UI เก่าถ้ามี
+if PlayerGui:FindFirstChild("MainUI") then
+	PlayerGui.MainUI:Destroy()
+end
 
--- Card
-local Card = Instance.new("Frame")
-Card.Parent = Gui
-Card.Size = UDim2.fromOffset(175, 46)
-Card.AnchorPoint = Vector2.new(1,1)
-Card.Position = UDim2.new(0.985,0,0.965,0)
-Card.BackgroundColor3 = Color3.fromRGB(30,30,30)
-Card.BackgroundTransparency = 0.08
-Card.BorderSizePixel = 0
+-- ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MainUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.Parent = PlayerGui
 
-Instance.new("UICorner", Card).CornerRadius = UDim.new(0,18)
+-- ปุ่มเปิด UI
+local OpenButton = Instance.new("TextButton")
+OpenButton.Name = "OpenButton"
+OpenButton.Parent = ScreenGui
 
+OpenButton.Size = UDim2.fromScale(0.12, 0.06)
+OpenButton.Position = UDim2.fromScale(0.03, 0.45)
+
+OpenButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+OpenButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+OpenButton.Text = "OPEN"
+OpenButton.TextScaled = true
+
+local OpenCorner = Instance.new("UICorner")
+OpenCorner.CornerRadius = UDim.new(0.3, 0)
+OpenCorner.Parent = OpenButton
+
+-- Main Frame
+local Main = Instance.new("Frame")
+Main.Name = "MainFrame"
+Main.Parent = ScreenGui
+
+Main.AnchorPoint = Vector2.new(0.5, 0.5)
+Main.Position = UDim2.fromScale(0.5, 0.5)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0.08, 0)
+Corner.Parent = Main
+
+-- กัน UI เพี้ยน
+local Aspect = Instance.new("UIAspectRatioConstraint")
+Aspect.AspectRatio = 1.4
+Aspect.Parent = Main
+
+-- ขอบ
 local Stroke = Instance.new("UIStroke")
-Stroke.Parent = Card
-Stroke.Thickness = 1
-Stroke.Color = Color3.fromRGB(70,70,70)
-Stroke.Transparency = 0.45
+Stroke.Thickness = 2
+Stroke.Color = Color3.fromRGB(100, 100, 100)
+Stroke.Parent = Main
 
--- Shadow
-local Shadow = Instance.new("ImageLabel")
-Shadow.Parent = Card
-Shadow.BackgroundTransparency = 1
-Shadow.Size = UDim2.new(1,24,1,24)
-Shadow.Position = UDim2.new(0,-12,0,-12)
-Shadow.Image = "rbxassetid://1316045217"
-Shadow.ImageTransparency = 0.55
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(10,10,118,118)
-Shadow.ZIndex = 0
+-- Padding
+local Padding = Instance.new("UIPadding")
+Padding.PaddingTop = UDim.new(0.05, 0)
+Padding.PaddingBottom = UDim.new(0.05, 0)
+Padding.PaddingLeft = UDim.new(0.05, 0)
+Padding.PaddingRight = UDim.new(0.05, 0)
+Padding.Parent = Main
 
 -- Title
-local Title = Instance.new("TextButton")
-Title.Parent = Card
+local Title = Instance.new("TextLabel")
+Title.Parent = Main
+
+Title.Size = UDim2.fromScale(1, 0.15)
+Title.Position = UDim2.fromScale(0, 0)
+
 Title.BackgroundTransparency = 1
-Title.Size = UDim2.new(1,-34,1,0)
-Title.Position = UDim2.new(0,12,0,0)
-Title.Font = Enum.Font.GothamMedium
-Title.Text = "Copy Discord Server"
-Title.TextColor3 = Color3.new(1,1,1)
-Title.TextSize = 14
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.AutoButtonColor = false
+Title.Text = "Pat UI"
+Title.TextScaled = true
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 
--- Close
-local Close = Instance.new("TextButton")
-Close.Parent = Card
-Close.AnchorPoint = Vector2.new(1,0)
-Close.Position = UDim2.new(1,-8,0,8)
-Close.Size = UDim2.fromOffset(18,18)
-Close.Text = "✕"
-Close.Font = Enum.Font.GothamBold
-Close.TextSize = 12
-Close.TextColor3 = Color3.new(1,1,1)
-Close.BackgroundColor3 = Color3.fromRGB(80,80,80)
-Close.BorderSizePixel = 0
+-- ปุ่มตัวอย่าง
+local Button = Instance.new("TextButton")
+Button.Parent = Main
 
-Instance.new("UICorner", Close).CornerRadius = UDim.new(1,0)
+Button.Size = UDim2.fromScale(0.8, 0.15)
+Button.Position = UDim2.fromScale(0.1, 0.3)
 
--- เปิดตัวแบบสมูท
-Card.Size = UDim2.fromOffset(165,42)
-Card.BackgroundTransparency = 1
+Button.Text = "CLICK"
+Button.TextScaled = true
 
-TweenService:Create(Card,TweenInfo.new(
-	0.28,
-	Enum.EasingStyle.Quint,
-	Enum.EasingDirection.Out
-),{
-	Size = UDim2.fromOffset(175,46),
-	BackgroundTransparency = 0.08
-}):Play()
+Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+Button.TextColor3 = Color3.fromRGB(255, 255, 255)
 
--- ลากได้
-local dragging = false
-local dragInput
-local dragStart
-local startPos
+local ButtonCorner = Instance.new("UICorner")
+ButtonCorner.CornerRadius = UDim.new(0.25, 0)
+ButtonCorner.Parent = Button
 
-Card.InputBegan:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPos = Card.Position
+-- เปิด/ปิด UI
+local Open = true
+local isTweening = false
+local currentTargetSize = UDim2.fromScale(0.55, 0.55)
+local tweenInfo = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-		input.Changed:Connect(function()
-			if input.UserInputState == Enum.UserInputState.End then
-				dragging = false
-			end
+-- ตรวจขนาดหน้าจอ
+local Camera = workspace.CurrentCamera
+
+local function computeTargetSize()
+	local View = Camera.ViewportSize
+	if View.X < 700 then
+		-- มือถือ
+		return UDim2.fromScale(0.85, 0.55)
+	else
+		-- PC
+		return UDim2.fromScale(0.55, 0.55)
+	end
+end
+
+local function ResizeUI()
+	currentTargetSize = computeTargetSize()
+
+	-- ถ้าเปิดอยู่ ให้ tween ไปขนาดใหม่เพื่อให้ลื่น
+	if Main.Visible and not isTweening then
+		isTweening = true
+		local tween = TweenService:Create(Main, tweenInfo, { Size = currentTargetSize })
+		tween:Play()
+		tween.Completed:Connect(function()
+			isTweening = false
+		end)
+	else
+		-- ถ้าไม่ visible ให้ตั้งค่า size เงียบๆ เพื่อรอเปิด
+		Main.Size = currentTargetSize
+	end
+end
+
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(ResizeUI)
+
+-- เริ่มต้นขนาดและสถานะ
+Main.Visible = Open
+ResizeUI()
+
+OpenButton.MouseButton1Click:Connect(function()
+	if isTweening then return end
+	isTweening = true
+
+	Open = not Open
+
+	if Open then
+		Main.Visible = true
+		local tween = TweenService:Create(Main, tweenInfo, { Size = currentTargetSize })
+		tween:Play()
+		tween.Completed:Connect(function()
+			isTweening = false
+		end)
+	else
+		local tween = TweenService:Create(Main, tweenInfo, { Size = UDim2.fromScale(0, 0) })
+		tween:Play()
+		tween.Completed:Connect(function()
+			Main.Visible = false
+			isTweening = false
 		end)
 	end
 end)
 
-Card.InputChanged:Connect(function(input)
-	if input.UserInputType == Enum.UserInputType.MouseMovement
-	or input.UserInputType == Enum.UserInputType.Touch then
-		dragInput = input
-	end
-end)
-
-UIS.InputChanged:Connect(function(input)
-	if input == dragInput and dragging then
-		local delta = input.Position - dragStart
-		Card.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
-		)
-	end
-end)
-
--- Copy
-local function CopyDiscord()
-
-	if setclipboard then
-		setclipboard("https://discord.gg/v7VGZEdfgC")
-	elseif toclipboard then
-		toclipboard("https://discord.gg/v7VGZEdfgC")
-	end
-
-	pcall(function()
-		StarterGui:SetCore("SendNotification",{
-			Title = "Discord",
-			Text = "Discord link copied!",
-			Duration = 2
-		})
-	end)
-
-	local down = TweenService:Create(Card,TweenInfo.new(
-		0.08,
-		Enum.EasingStyle.Quad
-	),{
-		Size = UDim2.fromOffset(168,44)
-	})
-
-	local up = TweenService:Create(Card,TweenInfo.new(
-		0.12,
-		Enum.EasingStyle.Back
-	),{
-		Size = UDim2.fromOffset(175,46)
-	})
-
-	down:Play()
-	down.Completed:Wait()
-	up:Play()
-end
-
-Title.MouseButton1Click:Connect(CopyDiscord)
-
-Close.MouseButton1Click:Connect(function()
-	local tween = TweenService:Create(Card,TweenInfo.new(
-		0.2,
-		Enum.EasingStyle.Quint
-	),{
-		BackgroundTransparency = 1,
-		Size = UDim2.fromOffset(165,42)
-	})
-
-	tween:Play()
-	tween.Completed:Wait()
-	Gui:Destroy()
-end)
+-- หมายเหตุ: วางสคริปต์นี้เป็น LocalScript (เช่น StarterPlayerScripts หรือ StarterGui) เพื่อให้ Players.LocalPlayer ใช้งานได้ตามปกติ.
