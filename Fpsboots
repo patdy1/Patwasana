@@ -1,79 +1,43 @@
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
-
 local LocalPlayer = Players.LocalPlayer
 
-
--- ตรวจว่าเป็นตัวละครผู้เล่นหรือ NPC หรือไม่
-local function IsCharacterOrNPC(obj)
-
-	local model = obj:FindFirstAncestorOfClass("Model")
-
-	if model then
-		
-		-- ผู้เล่น
-		if Players:GetPlayerFromCharacter(model) then
-			return true
-		end
-		
-		-- NPC ที่มี Humanoid
-		if model:FindFirstChildOfClass("Humanoid") then
-			return true
-		end
-		
-	end
-
-	return false
+local function IsDescendantOfPlayer(obj)
+    local character = LocalPlayer.Character
+    if character and obj:IsDescendantOf(character) then
+        return true
+    end
+    if obj:IsDescendantOf(LocalPlayer) then
+        return true
+    end
+    return false
 end
 
+local function RemoveTexturesButKeepDecalsAndGuis(obj)
+    if IsDescendantOfPlayer(obj) then
+        return
+    end
 
+    for _, child in pairs(obj:GetChildren()) do
+        if child:IsA("Texture") or child:IsA("SurfaceAppearance") then
+            child:Destroy()
+        end
+    end
 
--- ลบเฉพาะ Texture ที่ปลอดภัย
-local function RemoveSafeTexture(obj)
+    if obj:IsA("BasePart") then
+        obj.Material = Enum.Material.SmoothPlastic
+    end
 
-	-- ไม่แตะตัวละคร/NPC
-	if IsCharacterOrNPC(obj) then
-		return
-	end
-
-
-	-- ลบเฉพาะ Texture เท่านั้น
-	if obj:IsA("Texture") then
-		
-		local parent = obj.Parent
-
-
-		-- ต้องอยู่บน Part เท่านั้น
-		if parent and parent:IsA("BasePart") then
-			
-			-- ข้าม MeshPart เพราะ Texture อาจเป็นสีหลัก
-			if not parent:IsA("MeshPart") then
-				
-				obj:Destroy()
-				
-			end
-			
-		end
-		
-	end
-
+    for _, child in pairs(obj:GetChildren()) do
+        RemoveTexturesButKeepDecalsAndGuis(child)
+    end
 end
 
+-- ทำครั้งแรกตอนเริ่มเกมลบของเก่า
+RemoveTexturesButKeepDecalsAndGuis(Workspace)
 
-
--- สแกนแมปตอนเริ่ม
-for _, obj in ipairs(Workspace:GetDescendants()) do
-	RemoveSafeTexture(obj)
-end
-
-
-
--- ตรวจ Texture ใหม่ที่เข้ามา
+-- ฟังเหตุการณ์วัตถุใหม่เพิ่มเข้ามา
 Workspace.DescendantAdded:Connect(function(obj)
-
-	task.defer(function()
-		RemoveSafeTexture(obj)
-	end)
-
+    RemoveTexturesButKeepDecalsAndGuis(obj)
 end)
