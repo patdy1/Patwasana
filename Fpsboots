@@ -1,29 +1,79 @@
+local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
-local function RemoveOnlySurfaceTextures(obj)
 
-	-- ลบ Texture ปกติเท่านั้น
-	if obj:IsA("Texture") then
-		obj:Destroy()
+local LocalPlayer = Players.LocalPlayer
+
+
+-- ตรวจว่าเป็นตัวละครผู้เล่นหรือ NPC หรือไม่
+local function IsCharacterOrNPC(obj)
+
+	local model = obj:FindFirstAncestorOfClass("Model")
+
+	if model then
+		
+		-- ผู้เล่น
+		if Players:GetPlayerFromCharacter(model) then
+			return true
+		end
+		
+		-- NPC ที่มี Humanoid
+		if model:FindFirstChildOfClass("Humanoid") then
+			return true
+		end
+		
 	end
 
-	-- ไม่แตะ:
-	-- Decal
-	-- SurfaceAppearance
-	-- MeshPart.TextureID
-	-- Part.Color
-	-- Material
+	return false
+end
+
+
+
+-- ลบเฉพาะ Texture ที่ปลอดภัย
+local function RemoveSafeTexture(obj)
+
+	-- ไม่แตะตัวละคร/NPC
+	if IsCharacterOrNPC(obj) then
+		return
+	end
+
+
+	-- ลบเฉพาะ Texture เท่านั้น
+	if obj:IsA("Texture") then
+		
+		local parent = obj.Parent
+
+
+		-- ต้องอยู่บน Part เท่านั้น
+		if parent and parent:IsA("BasePart") then
+			
+			-- ข้าม MeshPart เพราะ Texture อาจเป็นสีหลัก
+			if not parent:IsA("MeshPart") then
+				
+				obj:Destroy()
+				
+			end
+			
+		end
+		
+	end
 
 end
 
 
--- ทำครั้งแรก
+
+-- สแกนแมปตอนเริ่ม
 for _, obj in ipairs(Workspace:GetDescendants()) do
-	RemoveOnlySurfaceTextures(obj)
+	RemoveSafeTexture(obj)
 end
 
 
--- ตรวจของใหม่
+
+-- ตรวจ Texture ใหม่ที่เข้ามา
 Workspace.DescendantAdded:Connect(function(obj)
-	RemoveOnlySurfaceTextures(obj)
+
+	task.defer(function()
+		RemoveSafeTexture(obj)
+	end)
+
 end)
