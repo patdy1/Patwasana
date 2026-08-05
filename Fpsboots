@@ -1,54 +1,18 @@
-local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 
-local LocalPlayer = Players.LocalPlayer
-
-local function IsPlayerObject(obj)
-	local Character = LocalPlayer.Character
-
-	if Character and obj:IsDescendantOf(Character) then
-		return true
-	end
-
-	return obj:IsDescendantOf(LocalPlayer)
-end
-
-
-local function OptimizeObject(obj)
-	if IsPlayerObject(obj) then
-		return
-	end
-
+-- ลบเฉพาะ Texture เท่านั้น
+local function RemoveTexture(obj)
 	if obj:IsA("Texture") then
 		obj:Destroy()
-		return
-	end
-
-	if obj:IsA("SurfaceAppearance") then
-		obj:Destroy()
-		return
-	end
-
-	if obj:IsA("BasePart") then
-		obj.Material = Enum.Material.SmoothPlastic
 	end
 end
 
-
-local function ScanWorkspace()
-	for _, obj in ipairs(Workspace:GetDescendants()) do
-		OptimizeObject(obj)
-	end
+-- สแกนของที่มีอยู่ในแมปตอนเริ่ม
+for _, obj in ipairs(Workspace:GetDescendants()) do
+	RemoveTexture(obj)
 end
 
-
--- ทำครั้งแรก
-ScanWorkspace()
-
-
--- ของใหม่เข้าเกม
+-- ตรวจจับ Texture ที่ถูกเพิ่มเข้ามาใหม่
 Workspace.DescendantAdded:Connect(function(obj)
-	task.defer(function()
-		OptimizeObject(obj)
-	end)
+	RemoveTexture(obj)
 end)
