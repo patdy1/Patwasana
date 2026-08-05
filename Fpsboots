@@ -1,18 +1,29 @@
 local Workspace = game:GetService("Workspace")
 
--- ลบเฉพาะ Texture เท่านั้น
-local function RemoveTexture(obj)
+local function RemoveOnlySurfaceTextures(obj)
+
+	-- ลบ Texture ปกติเท่านั้น
 	if obj:IsA("Texture") then
 		obj:Destroy()
 	end
+
+	-- ไม่แตะ:
+	-- Decal
+	-- SurfaceAppearance
+	-- MeshPart.TextureID
+	-- Part.Color
+	-- Material
+
 end
 
--- สแกนของที่มีอยู่ในแมปตอนเริ่ม
+
+-- ทำครั้งแรก
 for _, obj in ipairs(Workspace:GetDescendants()) do
-	RemoveTexture(obj)
+	RemoveOnlySurfaceTextures(obj)
 end
 
--- ตรวจจับ Texture ที่ถูกเพิ่มเข้ามาใหม่
+
+-- ตรวจของใหม่
 Workspace.DescendantAdded:Connect(function(obj)
-	RemoveTexture(obj)
+	RemoveOnlySurfaceTextures(obj)
 end)
