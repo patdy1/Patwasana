@@ -1,0 +1,49 @@
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local LocalPlayer = Players.LocalPlayer
+
+local function IsPlayerObject(instance)
+    local character = LocalPlayer.Character
+
+    if character and instance:IsDescendantOf(character) then
+        return true
+    end
+
+    return instance:IsDescendantOf(LocalPlayer)
+end
+
+local function Optimize(instance)
+    if not instance or not instance.Parent then
+        return
+    end
+
+    if IsPlayerObject(instance) then
+        return
+    end
+
+    if instance:IsA("Texture") or instance:IsA("SurfaceAppearance") then
+        pcall(function()
+            instance:Destroy()
+        end)
+        return
+    end
+
+    if instance:IsA("BasePart") then
+        pcall(function()
+            instance.Material = Enum.Material.SmoothPlastic
+        end)
+    end
+
+    local children = instance:GetChildren()
+
+    for i = 1, #children do
+        Optimize(children[i])
+    end
+end
+
+Optimize(Workspace)
+
+Workspace.DescendantAdded:Connect(function(instance)
+    task.defer(Optimize, instance)
+end)
