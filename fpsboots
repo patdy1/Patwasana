@@ -1,0 +1,879 @@
+--[[
+    Roblox Ultra FPS Boost
+    Client-Side / LocalScript
+    Luau 100%
+
+    MAIN RULE:
+    Character / NPC = PROTECTED
+    Tool visuals = OPTIMIZED
+    Map / Props / Environment = OPTIMIZED
+
+    Does NOT modify:
+        Character appearance
+        Humanoid
+        Animations
+        Body parts
+        Accessories
+        Clothing
+        CharacterMesh
+        BodyColors
+        Skin
+        NPC appearance
+
+    Optimizes:
+        Textures
+        Decals
+        SurfaceAppearance
+        Non-character shadows
+        ParticleEmitter
+        Trail
+        Beam
+        Smoke
+        Fire
+        Sparkles
+        Highlight
+        Lights
+        Lighting post effects
+
+    No RenderStepped scanning.
+    No infinite fast loops.
+    Event based after initial scan.
+]]
+
+----------------------------------------------------------------
+-- SERVICES
+----------------------------------------------------------------
+
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+
+local LocalPlayer = Players.LocalPlayer
+
+----------------------------------------------------------------
+-- CONFIG
+----------------------------------------------------------------
+
+local CONFIG = {
+    -- Remove map textures
+    RemoveTextures = true,
+    RemoveDecals = true,
+    RemoveSurfaceAppearance = true,
+
+    -- Make non-character parts visually simpler
+    SimplifyMaterials = true,
+
+    -- Disable shadows on non-character objects
+    DisableShadows = true,
+
+    -- Disable expensive visual effects
+    DisableParticles = true,
+    DisableTrails = true,
+    DisableBeams = true,
+    DisableSmoke = true,
+    DisableFire = true,
+    DisableSparkles = true,
+    DisableHighlights = true,
+    DisableLights = true,
+
+    -- Lighting post-processing
+    DisablePostProcessing = true,
+
+    -- Optimize Tools while preserving functionality
+    OptimizeTools = true,
+
+    -- Prevent repeated processing
+    UseProcessedCache = true,
+}
+
+----------------------------------------------------------------
+-- CACHE
+----------------------------------------------------------------
+
+local Processed = setmetatable({}, {
+    __mode = "k"
+})
+
+local ProtectedCharacters = setmetatable({}, {
+    __mode = "k"
+})
+
+local ProtectedModels = setmetatable({}, {
+    __mode = "k"
+})
+
+local ConnectedPlayers = setmetatable({}, {
+    __mode = "k"
+})
+
+----------------------------------------------------------------
+-- CHARACTER / NPC DETECTION
+----------------------------------------------------------------
+
+local function IsPlayerCharacterModel(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player.Character == model then
+            return true
+        end
+    end
+
+    return false
+end
+
+local function HasHumanoid(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    return model:FindFirstChildOfClass("Humanoid") ~= nil
+end
+
+local function IsNPCModel(model)
+    if not model or not model:IsA("Model") then
+        return false
+    end
+
+    if IsPlayerCharacterModel(model) then
+        return false
+    end
+
+    return HasHumanoid(model)
+end
+
+----------------------------------------------------------------
+-- REGISTER PROTECTED MODEL
+----------------------------------------------------------------
+
+local function RegisterProtectedModel(model)
+    if not model or not model:IsA("Model") then
+        return
+    end
+
+    ProtectedModels[model] = true
+
+    for _, descendant in ipairs(model:GetDescendants()) do
+        ProtectedCharacters[descendant] = true
+    end
+end
+
+----------------------------------------------------------------
+-- UNREGISTER / REFRESH CHARACTER CACHE
+----------------------------------------------------------------
+
+local function RegisterCharacter(character)
+    if not character then
+        return
+    end
+
+    ProtectedModels[character] = true
+
+    -- Mark existing descendants
+    for _, descendant in ipairs(character:GetDescendants()) do
+        ProtectedCharacters[descendant] = true
+    end
+
+    -- Protect anything newly added inside character
+    character.DescendantAdded:Connect(function(instance)
+        ProtectedCharacters[instance] = true
+    end)
+end
+
+----------------------------------------------------------------
+-- INITIAL PLAYER CHARACTERS
+----------------------------------------------------------------
+
+local function SetupPlayer(player)
+    if ConnectedPlayers[player] then
+        return
+    end
+
+    ConnectedPlayers[player] = true
+
+    if player.Character then
+        RegisterCharacter(player.Character)
+    end
+
+    player.CharacterAdded:Connect(function(character)
+        -- Register immediately
+        RegisterCharacter(character)
+    end)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    SetupPlayer(player)
+end
+
+Players.PlayerAdded:Connect(function(player)
+    SetupPlayer(player)
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    ConnectedPlayers[player] = nil
+
+    if player.Character then
+        ProtectedModels[player.Character] = nil
+    end
+end)
+
+----------------------------------------------------------------
+-- FIND PROTECTED MODEL FROM ANCESTORS
+----------------------------------------------------------------
+
+local function FindHumanoidModel(instance)
+    local current = instance
+
+    while current do
+        if current:IsA("Model") then
+            if ProtectedModels[current] then
+                return current
+            end
+
+            -- Player character
+            if IsPlayerCharacterModel(current) then
+                ProtectedModels[current] = true
+                return current
+            end
+
+            -- NPC
+            if IsNPCModel(current) then
+                ProtectedModels[current] = true
+                return current
+            end
+        end
+
+        current = current.Parent
+    end
+
+    return nil
+end
+
+----------------------------------------------------------------
+-- TOOL DETECTION
+----------------------------------------------------------------
+
+local function FindTool(instance)
+    local current = instance
+
+    while current do
+        if current:IsA("Tool") then
+            return current
+        end
+
+        -- Stop once we leave Workspace/Character hierarchy
+        if current == Workspace then
+            break
+        end
+
+        current = current.Parent
+    end
+
+    return nil
+end
+
+----------------------------------------------------------------
+-- CHARACTER/NPC PROTECTION
+----------------------------------------------------------------
+
+local function IsCharacterOrNPC(instance)
+    if not instance then
+        return false
+    end
+
+    if ProtectedCharacters[instance] then
+        return true
+    end
+
+    local protectedModel = FindHumanoidModel(instance)
+
+    return protectedModel ~= nil
+end
+
+----------------------------------------------------------------
+-- TOOL VISUAL EXCEPTION
+--
+-- A held Tool becomes a child of Character.
+-- We allow ONLY the Tool's visual descendants to be processed.
+--
+-- We NEVER change:
+-- Tool
+-- Handle gameplay
+-- Collision
+-- CanTouch
+-- CanQuery
+-- CanCollide
+-- scripts
+-- RemoteEvents
+-- constraints
+-- activation logic
+----------------------------------------------------------------
+
+local function IsToolVisualObject(instance)
+    local tool = FindTool(instance)
+
+    if not tool then
+        return false
+    end
+
+    -- Only visual objects are allowed through
+    if instance:IsA("Texture")
+        or instance:IsA("Decal")
+        or instance:IsA("SurfaceAppearance")
+        or instance:IsA("ParticleEmitter")
+        or instance:IsA("Trail")
+        or instance:IsA("Beam")
+        or instance:IsA("Smoke")
+        or instance:IsA("Fire")
+        or instance:IsA("Sparkles")
+        or instance:IsA("Highlight")
+        or instance:IsA("PointLight")
+        or instance:IsA("SpotLight")
+        or instance:IsA("SurfaceLight") then
+
+        return true
+    end
+
+    return false
+end
+
+----------------------------------------------------------------
+-- FINAL PROTECTION CHECK
+----------------------------------------------------------------
+
+local function ShouldSkip(instance)
+    if not instance then
+        return true
+    end
+
+    -- Tool visual exception
+    if CONFIG.OptimizeTools and IsToolVisualObject(instance) then
+        return false
+    end
+
+    -- Everything inside Character/NPC is protected
+    if IsCharacterOrNPC(instance) then
+        return true
+    end
+
+    return false
+end
+
+----------------------------------------------------------------
+-- TEXTURE OPTIMIZATION
+----------------------------------------------------------------
+
+local function OptimizeTexture(instance)
+    if instance:IsA("Texture") then
+
+        if CONFIG.RemoveTextures then
+            instance:Destroy()
+        end
+
+        return true
+    end
+
+    if instance:IsA("Decal") then
+
+        if CONFIG.RemoveDecals then
+            instance:Destroy()
+        end
+
+        return true
+    end
+
+    if instance:IsA("SurfaceAppearance") then
+
+        if CONFIG.RemoveSurfaceAppearance then
+            instance:Destroy()
+        end
+
+        return true
+    end
+
+    return false
+end
+
+----------------------------------------------------------------
+-- BASEPART OPTIMIZATION
+----------------------------------------------------------------
+
+local function OptimizeBasePart(part)
+    if not part:IsA("BasePart") then
+        return
+    end
+
+    if CONFIG.SimplifyMaterials then
+        -- Do NOT touch protected characters/NPCs
+        if not IsCharacterOrNPC(part) then
+            pcall(function()
+                part.Material = Enum.Material.SmoothPlastic
+            end)
+        end
+    end
+
+    if CONFIG.DisableShadows then
+        if not IsCharacterOrNPC(part) then
+            pcall(function()
+                part.CastShadow = false
+            end)
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- VFX OPTIMIZATION
+----------------------------------------------------------------
+
+local function OptimizeEffect(instance)
+
+    if instance:IsA("ParticleEmitter") then
+
+        if CONFIG.DisableParticles then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Trail") then
+
+        if CONFIG.DisableTrails then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Beam") then
+
+        if CONFIG.DisableBeams then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Smoke") then
+
+        if CONFIG.DisableSmoke then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Fire") then
+
+        if CONFIG.DisableFire then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Sparkles") then
+
+        if CONFIG.DisableSparkles then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("Highlight") then
+
+        if CONFIG.DisableHighlights then
+            instance.Enabled = false
+        end
+
+        return
+    end
+
+    if instance:IsA("PointLight")
+        or instance:IsA("SpotLight")
+        or instance:IsA("SurfaceLight") then
+
+        if CONFIG.DisableLights then
+            instance.Enabled = false
+        end
+
+        return
+    end
+end
+
+----------------------------------------------------------------
+-- SINGLE INSTANCE OPTIMIZER
+----------------------------------------------------------------
+
+local function OptimizeInstance(instance)
+
+    if not instance then
+        return
+    end
+
+    if not instance.Parent then
+        return
+    end
+
+    -- Prevent duplicate processing
+    if CONFIG.UseProcessedCache then
+        if Processed[instance] then
+            return
+        end
+    end
+
+    ----------------------------------------------------------------
+    -- TOOL VISUALS ARE THE ONLY EXCEPTION INSIDE CHARACTER
+    ----------------------------------------------------------------
+
+    local isToolVisual = IsToolVisualObject(instance)
+
+    if not isToolVisual then
+
+        -- Absolute character/NPC protection
+        if IsCharacterOrNPC(instance) then
+            return
+        end
+
+    end
+
+    ----------------------------------------------------------------
+    -- Mark processed
+    ----------------------------------------------------------------
+
+    if CONFIG.UseProcessedCache then
+        Processed[instance] = true
+    end
+
+    ----------------------------------------------------------------
+    -- Texture / Decal / SurfaceAppearance
+    ----------------------------------------------------------------
+
+    if OptimizeTexture(instance) then
+        return
+    end
+
+    ----------------------------------------------------------------
+    -- BasePart
+    ----------------------------------------------------------------
+
+    if instance:IsA("BasePart") then
+        OptimizeBasePart(instance)
+        return
+    end
+
+    ----------------------------------------------------------------
+    -- Visual effects
+    ----------------------------------------------------------------
+
+    OptimizeEffect(instance)
+end
+
+----------------------------------------------------------------
+-- SCAN ROOT
+----------------------------------------------------------------
+
+local function ScanRoot(root)
+    if not root then
+        return
+    end
+
+    -- Root itself
+    OptimizeInstance(root)
+
+    -- Descendants
+    local descendants = root:GetDescendants()
+
+    for i = 1, #descendants do
+        local instance = descendants[i]
+
+        pcall(function()
+            OptimizeInstance(instance)
+        end)
+    end
+end
+
+----------------------------------------------------------------
+-- NPC DISCOVERY
+----------------------------------------------------------------
+
+local function RegisterExistingNPCs()
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+
+        if descendant:IsA("Model") then
+
+            if IsNPCModel(descendant) then
+                RegisterProtectedModel(descendant)
+            end
+
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- DYNAMIC NPC DETECTION
+----------------------------------------------------------------
+
+local function CheckForNPC(instance)
+
+    if not instance:IsA("Model") then
+        return
+    end
+
+    if IsNPCModel(instance) then
+        RegisterProtectedModel(instance)
+    end
+end
+
+----------------------------------------------------------------
+-- LIGHTING OPTIMIZATION
+----------------------------------------------------------------
+
+local function OptimizeLighting()
+
+    if not CONFIG.DisablePostProcessing then
+        return
+    end
+
+    for _, effect in ipairs(Lighting:GetChildren()) do
+
+        if effect:IsA("BloomEffect")
+            or effect:IsA("SunRaysEffect")
+            or effect:IsA("DepthOfFieldEffect")
+            or effect:IsA("BlurEffect")
+            or effect:IsA("ColorCorrectionEffect") then
+
+            pcall(function()
+                effect.Enabled = false
+            end)
+
+        end
+    end
+end
+
+----------------------------------------------------------------
+-- LIGHTING DYNAMIC OBJECTS
+----------------------------------------------------------------
+
+Lighting.ChildAdded:Connect(function(instance)
+
+    if not CONFIG.DisablePostProcessing then
+        return
+    end
+
+    if instance:IsA("BloomEffect")
+        or instance:IsA("SunRaysEffect")
+        or instance:IsA("DepthOfFieldEffect")
+        or instance:IsA("BlurEffect")
+        or instance:IsA("ColorCorrectionEffect") then
+
+        pcall(function()
+            instance.Enabled = false
+        end)
+
+    end
+end)
+
+----------------------------------------------------------------
+-- INITIAL NPC REGISTRATION
+----------------------------------------------------------------
+
+RegisterExistingNPCs()
+
+----------------------------------------------------------------
+-- INITIAL LIGHTING OPTIMIZATION
+----------------------------------------------------------------
+
+OptimizeLighting()
+
+----------------------------------------------------------------
+-- INITIAL WORLD SCAN
+----------------------------------------------------------------
+
+ScanRoot(Workspace)
+
+----------------------------------------------------------------
+-- DYNAMIC WORKSPACE OBJECTS
+--
+-- Event based.
+-- No RenderStepped.
+-- No high-frequency loop.
+----------------------------------------------------------------
+
+Workspace.DescendantAdded:Connect(function(instance)
+
+    -- Small protected-model detection
+    pcall(function()
+
+        -- If a new Model appears and contains Humanoid,
+        -- register it as NPC.
+        if instance:IsA("Model") then
+            task.defer(function()
+                if instance.Parent and IsNPCModel(instance) then
+                    RegisterProtectedModel(instance)
+                end
+            end)
+        end
+
+        -- Delay one scheduler step so hierarchy is complete
+        task.defer(function()
+
+            if not instance.Parent then
+                return
+            end
+
+            OptimizeInstance(instance)
+
+        end)
+
+    end)
+
+end)
+
+----------------------------------------------------------------
+-- PLAYER CHARACTER SAFETY
+--
+-- Explicitly re-register on respawn.
+----------------------------------------------------------------
+
+for _, player in ipairs(Players:GetPlayers()) do
+
+    player.CharacterAdded:Connect(function(character)
+
+        RegisterCharacter(character)
+
+    end)
+
+end
+
+Players.PlayerAdded:Connect(function(player)
+
+    player.CharacterAdded:Connect(function(character)
+
+        RegisterCharacter(character)
+
+    end)
+
+end)
+
+----------------------------------------------------------------
+-- OPTIONAL: HANDLE EXISTING TOOLS
+----------------------------------------------------------------
+
+local function ScanPlayerTools(player)
+
+    local character = player.Character
+
+    if not character then
+        return
+    end
+
+    for _, child in ipairs(character:GetChildren()) do
+
+        if child:IsA("Tool") then
+
+            for _, descendant in ipairs(child:GetDescendants()) do
+
+                if IsToolVisualObject(descendant) then
+                    pcall(function()
+                        OptimizeInstance(descendant)
+                    end)
+                end
+
+            end
+
+        end
+
+    end
+end
+
+----------------------------------------------------------------
+-- INITIAL TOOL SCAN
+----------------------------------------------------------------
+
+if CONFIG.OptimizeTools then
+
+    for _, player in ipairs(Players:GetPlayers()) do
+
+        task.defer(function()
+            ScanPlayerTools(player)
+        end)
+
+    end
+
+end
+
+----------------------------------------------------------------
+-- TOOL EQUIP / NEW TOOL DETECTION
+----------------------------------------------------------------
+
+Workspace.DescendantAdded:Connect(function(instance)
+
+    if not CONFIG.OptimizeTools then
+        return
+    end
+
+    if instance:IsA("Tool") then
+
+        task.defer(function()
+
+            if not instance.Parent then
+                return
+            end
+
+            for _, descendant in ipairs(instance:GetDescendants()) do
+
+                if IsToolVisualObject(descendant) then
+
+                    pcall(function()
+                        OptimizeInstance(descendant)
+                    end)
+
+                end
+
+            end
+
+        end)
+
+    end
+
+end)
+
+----------------------------------------------------------------
+-- ERROR-SAFE CHARACTER CACHE REFRESH
+--
+-- If a Character/NPC was created before the event connection,
+-- make sure its descendants remain protected.
+----------------------------------------------------------------
+
+task.defer(function()
+
+    for _, player in ipairs(Players:GetPlayers()) do
+
+        if player.Character then
+            RegisterCharacter(player.Character)
+        end
+
+    end
+
+    for _, descendant in ipairs(Workspace:GetDescendants()) do
+
+        if descendant:IsA("Model") and IsNPCModel(descendant) then
+            RegisterProtectedModel(descendant)
+        end
+
+    end
+
+end)
+
+----------------------------------------------------------------
+-- DONE
+----------------------------------------------------------------
+
+print("[UltraFPS] Client optimization initialized.")
+print("[UltraFPS] Characters/NPCs protected.")
+print("[UltraFPS] Map visual details optimized.")
+print("[UltraFPS] Tool visual textures optimized.")
