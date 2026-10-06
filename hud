@@ -1,4 +1,6 @@
 --// Player Profile HUD
+--// Roblox UI Style
+--// Rounded UI + Top Layer
 --// Optimized LocalScript
 
 local Players = game:GetService("Players")
@@ -11,20 +13,71 @@ local playerGui = player:WaitForChild("PlayerGui")
 --==================================================
 
 local CONFIG = {
+
 	GuiName = "PlayerProfileHUD",
 
+	-- Position / Size
 	Position = UDim2.fromOffset(10, 10),
 	Size = UDim2.fromOffset(152, 56),
 
-	BackgroundColor = Color3.fromRGB(33, 33, 33),
-	StrokeColor = Color3.fromRGB(44, 44, 44),
-	TextColor = Color3.fromRGB(220, 220, 220),
+	--==================================================
+	-- ROBLOX UI COLORS
+	--==================================================
 
-	CornerRadius = 8,
-	AvatarCornerRadius = 6,
+	-- Main Background
+	BackgroundColor = Color3.fromRGB(35, 37, 39),
+	BackgroundTransparency = 0.10,
+
+	-- Panel
+	PanelColor = Color3.fromRGB(46, 48, 51),
+	PanelTransparency = 0.08,
+
+	-- Dark Panel
+	DarkPanelColor = Color3.fromRGB(25, 27, 29),
+	DarkPanelTransparency = 0.08,
+
+	-- Normal Button
+	ButtonColor = Color3.fromRGB(55, 57, 60),
+	ButtonTransparency = 0.05,
+
+	-- Hover
+	HoverColor = Color3.fromRGB(70, 72, 75),
+	HoverTransparency = 0.02,
+
+	-- Pressed
+	PressedColor = Color3.fromRGB(85, 87, 90),
+	PressedTransparency = 0,
+
+	-- Divider / Border
+	DividerColor = Color3.fromRGB(255, 255, 255),
+	DividerTransparency = 0.88,
+
+	-- Main Text
+	TextColor = Color3.fromRGB(255, 255, 255),
+	TextTransparency = 0,
+
+	-- Secondary Text
+	SecondaryTextColor = Color3.fromRGB(180, 180, 180),
+	SecondaryTextTransparency = 0.10,
+
+	--==================================================
+	-- ROUNDING
+	--==================================================
+
+	MainCornerRadius = 8,
+	PanelCornerRadius = 7,
+	AvatarCornerRadius = 7,
+
+	--==================================================
+	-- AVATAR
+	--==================================================
 
 	AvatarSize = 48,
 	AvatarPadding = 4,
+
+	--==================================================
+	-- TEXT
+	--==================================================
 
 	Font = Enum.Font.Gotham,
 	TextSize = 9,
@@ -45,102 +98,208 @@ end
 --==================================================
 
 local gui = Instance.new("ScreenGui")
+
 gui.Name = CONFIG.GuiName
+
+-- ไม่หายตอนเกิดใหม่
 gui.ResetOnSpawn = false
+
+-- ใช้พื้นที่ ScreenGui ปกติ
 gui.IgnoreGuiInset = false
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ให้ ZIndex ทำงานเป็นชั้น
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+
+-- อยู่บนสุดของ ScreenGui อื่น
+gui.DisplayOrder = 999999
+
 gui.Parent = playerGui
+
+--==================================================
+-- ROUND FUNCTION
+--==================================================
+
+local function makeRounded(instance, radius)
+
+	local corner = Instance.new("UICorner")
+
+	corner.Name = "Corner"
+	corner.CornerRadius = UDim.new(0, radius)
+
+	corner.Parent = instance
+
+	return corner
+
+end
 
 --==================================================
 -- MAIN FRAME
 --==================================================
 
 local main = Instance.new("Frame")
+
 main.Name = "Main"
+
 main.Size = CONFIG.Size
 main.Position = CONFIG.Position
 
 main.BackgroundColor3 = CONFIG.BackgroundColor
-main.BackgroundTransparency = 0
+main.BackgroundTransparency = CONFIG.BackgroundTransparency
 
 main.BorderSizePixel = 0
 
+-- Top layer
+main.ZIndex = 1000000
+
 main.Parent = gui
 
--- Rounded corners
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, CONFIG.CornerRadius)
-mainCorner.Parent = main
+-- Rounded
+makeRounded(
+	main,
+	CONFIG.MainCornerRadius
+)
 
--- Border
+--==================================================
+-- MAIN BORDER
+--==================================================
+
 local mainStroke = Instance.new("UIStroke")
+
 mainStroke.Name = "Border"
-mainStroke.Color = CONFIG.StrokeColor
+
+mainStroke.Color = CONFIG.DividerColor
 mainStroke.Thickness = 1
-mainStroke.Transparency = 0
+mainStroke.Transparency = CONFIG.DividerTransparency
+
 mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+mainStroke.ZIndex = 1000001
+
 mainStroke.Parent = main
+
+--==================================================
+-- AVATAR PANEL
+--==================================================
+
+local avatarPanel = Instance.new("Frame")
+
+avatarPanel.Name = "AvatarPanel"
+
+avatarPanel.Size = UDim2.fromOffset(
+	CONFIG.AvatarSize,
+	CONFIG.AvatarSize
+)
+
+avatarPanel.Position = UDim2.fromOffset(
+	CONFIG.AvatarPadding,
+	CONFIG.AvatarPadding
+)
+
+avatarPanel.BackgroundColor3 = CONFIG.PanelColor
+avatarPanel.BackgroundTransparency = CONFIG.PanelTransparency
+
+avatarPanel.BorderSizePixel = 0
+
+avatarPanel.ZIndex = 1000001
+
+avatarPanel.Parent = main
+
+-- Rounded
+makeRounded(
+	avatarPanel,
+	CONFIG.PanelCornerRadius
+)
 
 --==================================================
 -- AVATAR
 --==================================================
 
 local profile = Instance.new("ImageLabel")
+
 profile.Name = "Avatar"
-profile.Size = UDim2.fromOffset(
-	CONFIG.AvatarSize,
-	CONFIG.AvatarSize
-)
 
-profile.Position = UDim2.fromOffset(
-	CONFIG.AvatarPadding,
-	CONFIG.AvatarPadding
-)
+profile.Size = UDim2.fromScale(1, 1)
+profile.Position = UDim2.fromOffset(0, 0)
 
-profile.BackgroundTransparency = 1
+profile.BackgroundColor3 = CONFIG.DarkPanelColor
+profile.BackgroundTransparency = CONFIG.DarkPanelTransparency
+
 profile.BorderSizePixel = 0
+
 profile.ScaleType = Enum.ScaleType.Crop
 
 profile.Image = ""
 
-profile.Parent = main
+profile.ZIndex = 1000002
 
--- Avatar rounded corners
-local profileCorner = Instance.new("UICorner")
-profileCorner.CornerRadius = UDim.new(0, CONFIG.AvatarCornerRadius)
-profileCorner.Parent = profile
+profile.Parent = avatarPanel
+
+-- Rounded
+makeRounded(
+	profile,
+	CONFIG.AvatarCornerRadius
+)
 
 --==================================================
--- INFORMATION CONTAINER
+-- INFORMATION PANEL
 --==================================================
 
 local info = Instance.new("Frame")
+
 info.Name = "Info"
 
 info.Size = UDim2.fromOffset(92, 48)
 info.Position = UDim2.fromOffset(56, 4)
 
-info.BackgroundTransparency = 1
+info.BackgroundColor3 = CONFIG.PanelColor
+info.BackgroundTransparency = CONFIG.PanelTransparency
+
 info.BorderSizePixel = 0
 
+info.ZIndex = 1000001
+
 info.Parent = main
+
+-- Rounded
+makeRounded(
+	info,
+	CONFIG.PanelCornerRadius
+)
 
 --==================================================
 -- TEXT CREATOR
 --==================================================
 
-local function createText(name, y)
+local function createText(
+	name,
+	y,
+	color,
+	transparency
+)
+
 	local label = Instance.new("TextLabel")
 
 	label.Name = name
 
-	label.Size = UDim2.new(1, 0, 0, 11)
-	label.Position = UDim2.fromOffset(0, y)
+	label.Size = UDim2.new(
+		1,
+		-8,
+		0,
+		11
+	)
+
+	label.Position = UDim2.fromOffset(
+		4,
+		y
+	)
 
 	label.BackgroundTransparency = 1
+
 	label.BorderSizePixel = 0
 
-	label.TextColor3 = CONFIG.TextColor
+	label.TextColor3 = color
+	label.TextTransparency = transparency
+
 	label.Font = CONFIG.Font
 	label.TextSize = CONFIG.TextSize
 
@@ -151,25 +310,52 @@ local function createText(name, y)
 
 	label.RichText = false
 
+	label.ZIndex = 1000002
+
 	label.Parent = info
 
 	return label
+
 end
 
 --==================================================
 -- TEXT ELEMENTS
 --==================================================
 
-local nameText = createText("DisplayName", 0)
-local userText = createText("Username", 12)
-local dateText = createText("Date", 24)
-local timeText = createText("Time", 36)
+local nameText = createText(
+	"DisplayName",
+	0,
+	CONFIG.TextColor,
+	CONFIG.TextTransparency
+)
+
+local userText = createText(
+	"Username",
+	12,
+	CONFIG.SecondaryTextColor,
+	CONFIG.SecondaryTextTransparency
+)
+
+local dateText = createText(
+	"Date",
+	24,
+	CONFIG.SecondaryTextColor,
+	CONFIG.SecondaryTextTransparency
+)
+
+local timeText = createText(
+	"Time",
+	36,
+	CONFIG.SecondaryTextColor,
+	CONFIG.SecondaryTextTransparency
+)
 
 --==================================================
 -- PLAYER INFORMATION
 --==================================================
 
 nameText.Text = player.DisplayName
+
 userText.Text = "@" .. player.Name
 
 --==================================================
@@ -189,7 +375,9 @@ task.spawn(function()
 	end)
 
 	if success and image then
+
 		profile.Image = image
+
 	end
 
 end)
@@ -218,7 +406,10 @@ local function updateDateTime()
 
 end
 
--- Initial update
+--==================================================
+-- INITIAL UPDATE
+--==================================================
+
 updateDateTime()
 
 --==================================================
@@ -231,7 +422,6 @@ task.spawn(function()
 
 		updateDateTime()
 
-		-- Wait until the next second
 		task.wait(1)
 
 	end
