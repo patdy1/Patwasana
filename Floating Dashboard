@@ -1,0 +1,1135 @@
+--========================================================--
+--        MOVEMENT CONTROL PANEL - ROBLOX STUDIO
+--        Walk On Water / No Collision / Fly
+--        Designed for your own Roblox experience
+--========================================================--
+
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+
+--// Player
+local Player = Players.LocalPlayer
+
+--========================================================--
+-- CONFIG
+--========================================================--
+
+local CONFIG = {
+
+	-- UI
+	GuiName = "MovementControlPanel",
+
+	-- Default states
+	WalkOnWater = false,
+	NoCollision = false,
+	Fly = false,
+
+	-- UI size
+	Width = 280,
+	Height = 285,
+
+	-- Fly
+	FlyMultiplier = 1,
+
+	-- Water platform
+	WaterPlatformSize = Vector3.new(7, 0.25, 7),
+	WaterPlatformOffset = -3.15,
+
+	-- No Collision
+	NoCollisionDistance = 35,
+
+	-- UI
+	CornerRadius = 14,
+
+	-- Colors
+	Background = Color3.fromRGB(24, 25, 28),
+	Panel = Color3.fromRGB(32, 34, 38),
+	PanelDark = Color3.fromRGB(19, 20, 23),
+	Text = Color3.fromRGB(245, 245, 245),
+	SubText = Color3.fromRGB(160, 163, 170),
+
+	On = Color3.fromRGB(65, 190, 115),
+	Off = Color3.fromRGB(75, 77, 83),
+
+	Stroke = Color3.fromRGB(55, 58, 64),
+}
+
+--========================================================--
+-- CHARACTER
+--========================================================--
+
+local Character
+local Humanoid
+local RootPart
+
+local function SetupCharacter(char)
+
+	Character = char
+
+	Humanoid = char:WaitForChild("Humanoid")
+	RootPart = char:WaitForChild("HumanoidRootPart")
+
+end
+
+if Player.Character then
+	SetupCharacter(Player.Character)
+end
+
+Player.CharacterAdded:Connect(function(char)
+
+	SetupCharacter(char)
+
+	task.wait(0.25)
+
+	if WalkOnWaterEnabled then
+		CreateWaterPlatform()
+	end
+
+end)
+
+--========================================================--
+-- STATE
+--========================================================--
+
+local WalkOnWaterEnabled = false
+local NoCollisionEnabled = false
+local FlyEnabled = false
+
+--========================================================--
+-- HELPERS
+--========================================================--
+
+local function Create(className, properties, parent)
+
+	local object = Instance.new(className)
+
+	for property, value in pairs(properties) do
+		object[property] = value
+	end
+
+	object.Parent = parent
+
+	return object
+
+end
+
+local function AddCorner(object, radius)
+
+	local corner = Instance.new("UICorner")
+
+	corner.CornerRadius = UDim.new(0, radius or CONFIG.CornerRadius)
+
+	corner.Parent = object
+
+	return corner
+
+end
+
+local function AddStroke(object)
+
+	local stroke = Instance.new("UIStroke")
+
+	stroke.Color = CONFIG.Stroke
+	stroke.Thickness = 1
+
+	stroke.Transparency = 0.15
+
+	stroke.Parent = object
+
+	return stroke
+
+end
+
+--========================================================--
+-- GUI
+--========================================================--
+
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+local OldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
+
+if OldGui then
+	OldGui:Destroy()
+end
+
+local ScreenGui = Create("ScreenGui", {
+
+	Name = CONFIG.GuiName,
+
+	ResetOnSpawn = false,
+
+	IgnoreGuiInset = true,
+
+	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+
+}, PlayerGui)
+
+--========================================================--
+-- MAIN WINDOW
+--========================================================--
+
+local Main = Create("Frame", {
+
+	Name = "Main",
+
+	Size = UDim2.fromOffset(CONFIG.Width, CONFIG.Height),
+
+	Position = UDim2.new(0, 25, 0.5, -CONFIG.Height / 2),
+
+	BackgroundColor3 = CONFIG.Background,
+
+	BorderSizePixel = 0,
+
+}, ScreenGui)
+
+AddCorner(Main, CONFIG.CornerRadius)
+AddStroke(Main)
+
+-- Shadow
+local Shadow = Create("ImageLabel", {
+
+	Name = "Shadow",
+
+	BackgroundTransparency = 1,
+
+	Size = UDim2.new(1, 40, 1, 40),
+
+	Position = UDim2.fromOffset(-20, -20),
+
+	Image = "rbxassetid://1316045217",
+
+	ImageTransparency = 0.55,
+
+	ScaleType = Enum.ScaleType.Slice,
+
+	SliceCenter = Rect.new(10, 10, 118, 118),
+
+	ZIndex = 0,
+
+}, Main)
+
+Main.ZIndex = 2
+
+--========================================================--
+-- HEADER
+--========================================================--
+
+local Header = Create("Frame", {
+
+	Name = "Header",
+
+	Size = UDim2.new(1, 0, 0, 64),
+
+	BackgroundTransparency = 1,
+
+}, Main)
+
+local Title = Create("TextLabel", {
+
+	Name = "Title",
+
+	Size = UDim2.new(1, -30, 0, 27),
+
+	Position = UDim2.fromOffset(15, 9),
+
+	BackgroundTransparency = 1,
+
+	Text = "Movement Control",
+
+	TextColor3 = CONFIG.Text,
+
+	TextSize = 19,
+
+	Font = Enum.Font.GothamBold,
+
+	TextXAlignment = Enum.TextXAlignment.Left,
+
+}, Header)
+
+local Subtitle = Create("TextLabel", {
+
+	Name = "Subtitle",
+
+	Size = UDim2.new(1, -30, 0, 20),
+
+	Position = UDim2.fromOffset(15, 35),
+
+	BackgroundTransparency = 1,
+
+	Text = "Movement utilities",
+
+	TextColor3 = CONFIG.SubText,
+
+	TextSize = 12,
+
+	Font = Enum.Font.Gotham,
+
+	TextXAlignment = Enum.TextXAlignment.Left,
+
+}, Header)
+
+--========================================================--
+-- CONTENT
+--========================================================--
+
+local Content = Create("Frame", {
+
+	Name = "Content",
+
+	Size = UDim2.new(1, -24, 1, -72),
+
+	Position = UDim2.fromOffset(12, 65),
+
+	BackgroundTransparency = 1,
+
+}, Main)
+
+local Layout = Create("UIListLayout", {
+
+	Padding = UDim.new(0, 8),
+
+	SortOrder = Enum.SortOrder.LayoutOrder,
+
+}, Content)
+
+--========================================================--
+-- WATER SYSTEM
+--========================================================--
+
+local WaterPlatform
+
+local function DestroyWaterPlatform()
+
+	if WaterPlatform then
+
+		WaterPlatform:Destroy()
+
+		WaterPlatform = nil
+
+	end
+
+end
+
+function CreateWaterPlatform()
+
+	if not Character or not RootPart then
+		return
+	end
+
+	DestroyWaterPlatform()
+
+	WaterPlatform = Instance.new("Part")
+
+	WaterPlatform.Name = "LocalWaterPlatform"
+
+	WaterPlatform.Size = CONFIG.WaterPlatformSize
+
+	WaterPlatform.Anchored = true
+
+	WaterPlatform.CanCollide = true
+
+	WaterPlatform.CanTouch = false
+
+	WaterPlatform.CanQuery = false
+
+	WaterPlatform.Transparency = 1
+
+	WaterPlatform.CastShadow = false
+
+	WaterPlatform.Parent = Workspace
+
+end
+
+local function IsWaterBelow()
+
+	if not RootPart then
+		return false
+	end
+
+	local Origin = RootPart.Position + Vector3.new(0, 2, 0)
+
+	local Direction = Vector3.new(0, -12, 0)
+
+	local Params = RaycastParams.new()
+
+	Params.FilterType = Enum.RaycastFilterType.Exclude
+
+	Params.FilterDescendantsInstances = {
+		Character,
+		WaterPlatform
+	}
+
+	local Result = Workspace:Raycast(
+		Origin,
+		Direction,
+		Params
+	)
+
+	if not Result then
+		return false
+	end
+
+	return Result.Material == Enum.Material.Water
+
+end
+
+--========================================================--
+-- NO COLLISION
+--========================================================--
+
+local OriginalCollision = {}
+
+local function SaveCollision(part)
+
+	if OriginalCollision[part] == nil then
+
+		OriginalCollision[part] = part.CanCollide
+
+	end
+
+end
+
+local function RestoreCollision()
+
+	for part, originalValue in pairs(OriginalCollision) do
+
+		if part and part.Parent then
+
+			part.CanCollide = originalValue
+
+		end
+
+	end
+
+	table.clear(OriginalCollision)
+
+end
+
+local function UpdateNoCollision()
+
+	if not NoCollisionEnabled then
+
+		RestoreCollision()
+
+		return
+
+	end
+
+	if not RootPart then
+		return
+	end
+
+	local OverlapParams = OverlapParams.new()
+
+	OverlapParams.FilterType = Enum.RaycastFilterType.Exclude
+
+	OverlapParams.FilterDescendantsInstances = {
+		Character,
+		WaterPlatform
+	}
+
+	local Parts = Workspace:GetPartBoundsInRadius(
+		RootPart.Position,
+		CONFIG.NoCollisionDistance,
+		OverlapParams
+	)
+
+	for _, part in ipairs(Parts) do
+
+		if part:IsA("BasePart")
+			and part.Parent
+			and not part:IsDescendantOf(Character)
+			and part ~= WaterPlatform then
+
+			SaveCollision(part)
+
+			-- Don't disable terrain-like floor parts.
+			-- Parts positioned underneath the player remain collidable.
+			local relativeY = part.Position.Y - RootPart.Position.Y
+
+			if relativeY > -4 then
+
+				part.CanCollide = false
+
+			end
+
+		end
+
+	end
+
+end
+
+--========================================================--
+-- FLY SYSTEM
+--========================================================--
+
+local FlyConnection
+
+local BodyVelocity
+local BodyGyro
+
+local FlyingKeys = {
+
+	W = false,
+	A = false,
+	S = false,
+	D = false,
+	Space = false,
+	Shift = false,
+
+}
+
+local function DestroyFlyObjects()
+
+	if FlyConnection then
+
+		FlyConnection:Disconnect()
+
+		FlyConnection = nil
+
+	end
+
+	if BodyVelocity then
+
+		BodyVelocity:Destroy()
+
+		BodyVelocity = nil
+
+	end
+
+	if BodyGyro then
+
+		BodyGyro:Destroy()
+
+		BodyGyro = nil
+
+	end
+
+	if Humanoid then
+
+		Humanoid.AutoRotate = true
+
+	end
+
+end
+
+local function GetMapSpeed()
+
+	if not Humanoid then
+		return 16
+	end
+
+	return math.max(
+		Humanoid.WalkSpeed * CONFIG.FlyMultiplier,
+		1
+	)
+
+end
+
+local function StartFly()
+
+	if not Character or not RootPart or not Humanoid then
+		return
+	end
+
+	DestroyFlyObjects()
+
+	Humanoid.AutoRotate = false
+
+	BodyVelocity = Instance.new("BodyVelocity")
+
+	BodyVelocity.Name = "MovementFlyVelocity"
+
+	BodyVelocity.MaxForce = Vector3.new(
+		math.huge,
+		math.huge,
+		math.huge
+	)
+
+	BodyVelocity.P = 10000
+
+	BodyVelocity.Velocity = Vector3.zero
+
+	BodyVelocity.Parent = RootPart
+
+	BodyGyro = Instance.new("BodyGyro")
+
+	BodyGyro.Name = "MovementFlyGyro"
+
+	BodyGyro.MaxTorque = Vector3.new(
+		math.huge,
+		math.huge,
+		math.huge
+	)
+
+	BodyGyro.P = 10000
+
+	BodyGyro.CFrame = RootPart.CFrame
+
+	BodyGyro.Parent = RootPart
+
+	FlyConnection = RunService.RenderStepped:Connect(function()
+
+		if not FlyEnabled then
+			return
+		end
+
+		if not RootPart or not RootPart.Parent then
+			return
+		end
+
+		local Camera = Workspace.CurrentCamera
+
+		if not Camera then
+			return
+		end
+
+		local MoveDirection = Vector3.zero
+
+		local Forward = Camera.CFrame.LookVector
+
+		local Right = Camera.CFrame.RightVector
+
+		Forward = Vector3.new(
+			Forward.X,
+			0,
+			Forward.Z
+		)
+
+		Right = Vector3.new(
+			Right.X,
+			0,
+			Right.Z
+		)
+
+		if Forward.Magnitude > 0 then
+			Forward = Forward.Unit
+		end
+
+		if Right.Magnitude > 0 then
+			Right = Right.Unit
+		end
+
+		if FlyingKeys.W then
+			MoveDirection += Forward
+		end
+
+		if FlyingKeys.S then
+			MoveDirection -= Forward
+		end
+
+		if FlyingKeys.D then
+			MoveDirection += Right
+		end
+
+		if FlyingKeys.A then
+			MoveDirection -= Right
+		end
+
+		if FlyingKeys.Space then
+			MoveDirection += Vector3.new(0, 1, 0)
+		end
+
+		if FlyingKeys.Shift then
+			MoveDirection -= Vector3.new(0, 1, 0)
+		end
+
+		if MoveDirection.Magnitude > 0 then
+
+			MoveDirection = MoveDirection.Unit
+
+			BodyVelocity.Velocity =
+				MoveDirection * GetMapSpeed()
+
+		else
+
+			BodyVelocity.Velocity = Vector3.zero
+
+		end
+
+		BodyGyro.CFrame = CFrame.lookAt(
+			RootPart.Position,
+			RootPart.Position + Camera.CFrame.LookVector
+		)
+
+	end)
+
+end
+
+local function StopFly()
+
+	DestroyFlyObjects()
+
+end
+
+--========================================================--
+-- INPUT
+--========================================================--
+
+UserInputService.InputBegan:Connect(function(input, processed)
+
+	if processed then
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.W then
+		FlyingKeys.W = true
+
+	elseif input.KeyCode == Enum.KeyCode.A then
+		FlyingKeys.A = true
+
+	elseif input.KeyCode == Enum.KeyCode.S then
+		FlyingKeys.S = true
+
+	elseif input.KeyCode == Enum.KeyCode.D then
+		FlyingKeys.D = true
+
+	elseif input.KeyCode == Enum.KeyCode.Space then
+		FlyingKeys.Space = true
+
+	elseif input.KeyCode == Enum.KeyCode.LeftShift then
+		FlyingKeys.Shift = true
+
+	end
+
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+
+	if input.KeyCode == Enum.KeyCode.W then
+		FlyingKeys.W = false
+
+	elseif input.KeyCode == Enum.KeyCode.A then
+		FlyingKeys.A = false
+
+	elseif input.KeyCode == Enum.KeyCode.S then
+		FlyingKeys.S = false
+
+	elseif input.KeyCode == Enum.KeyCode.D then
+		FlyingKeys.D = false
+
+	elseif input.KeyCode == Enum.KeyCode.Space then
+		FlyingKeys.Space = false
+
+	elseif input.KeyCode == Enum.KeyCode.LeftShift then
+		FlyingKeys.Shift = false
+
+	end
+
+end)
+
+--========================================================--
+-- TOGGLE BUTTON
+--========================================================--
+
+local function CreateToggle(
+	name,
+	description,
+	defaultState,
+	callback
+)
+
+	local Button = Create("TextButton", {
+
+		Name = name,
+
+		Size = UDim2.new(1, 0, 0, 58),
+
+		BackgroundColor3 = CONFIG.Panel,
+
+		BorderSizePixel = 0,
+
+		AutoButtonColor = false,
+
+		Text = "",
+
+	}, Content)
+
+	AddCorner(Button, 11)
+	AddStroke(Button)
+
+	local NameLabel = Create("TextLabel", {
+
+		Name = "Name",
+
+		Size = UDim2.new(1, -85, 0, 22),
+
+		Position = UDim2.fromOffset(13, 8),
+
+		BackgroundTransparency = 1,
+
+		Text = name,
+
+		TextColor3 = CONFIG.Text,
+
+		TextSize = 14,
+
+		Font = Enum.Font.GothamMedium,
+
+		TextXAlignment = Enum.TextXAlignment.Left,
+
+	}, Button)
+
+	local DescriptionLabel = Create("TextLabel", {
+
+		Name = "Description",
+
+		Size = UDim2.new(1, -85, 0, 18),
+
+		Position = UDim2.fromOffset(13, 30),
+
+		BackgroundTransparency = 1,
+
+		Text = description,
+
+		TextColor3 = CONFIG.SubText,
+
+		TextSize = 10,
+
+		Font = Enum.Font.Gotham,
+
+		TextXAlignment = Enum.TextXAlignment.Left,
+
+	}, Button)
+
+	local Status = Create("TextLabel", {
+
+		Name = "Status",
+
+		Size = UDim2.fromOffset(58, 29),
+
+		Position = UDim2.new(1, -69, 0.5, -14),
+
+		BackgroundColor3 = CONFIG.Off,
+
+		BorderSizePixel = 0,
+
+		Text = "OFF",
+
+		TextColor3 = CONFIG.Text,
+
+		TextSize = 10,
+
+		Font = Enum.Font.GothamBold,
+
+	}, Button)
+
+	AddCorner(Status, 8)
+
+	local Enabled = defaultState
+
+	local function Refresh()
+
+		if Enabled then
+
+			Status.Text = "ON"
+
+			Status.BackgroundColor3 = CONFIG.On
+
+			Button.BackgroundColor3 =
+				Color3.fromRGB(35, 39, 39)
+
+		else
+
+			Status.Text = "OFF"
+
+			Status.BackgroundColor3 = CONFIG.Off
+
+			Button.BackgroundColor3 = CONFIG.Panel
+
+		end
+
+	end
+
+	Button.MouseButton1Click:Connect(function()
+
+		Enabled = not Enabled
+
+		Refresh()
+
+		callback(Enabled)
+
+	end)
+
+	Refresh()
+
+	return {
+
+		Button = Button,
+
+		Set = function(value)
+
+			Enabled = value
+
+			Refresh()
+
+			callback(Enabled)
+
+		end,
+
+		Get = function()
+
+			return Enabled
+
+		end,
+
+	}
+
+end
+
+--========================================================--
+-- CREATE BUTTONS
+--========================================================--
+
+local WaterToggle = CreateToggle(
+
+	"Walk On Water",
+
+	"Walk across water surfaces",
+
+	false,
+
+	function(enabled)
+
+		WalkOnWaterEnabled = enabled
+
+		if enabled then
+
+			CreateWaterPlatform()
+
+		else
+
+			DestroyWaterPlatform()
+
+		end
+
+	end
+
+)
+
+local CollisionToggle = CreateToggle(
+
+	"No Collision",
+
+	"Pass through nearby objects",
+
+	false,
+
+	function(enabled)
+
+		NoCollisionEnabled = enabled
+
+		if not enabled then
+
+			RestoreCollision()
+		end
+
+	end
+
+)
+
+local FlyToggle = CreateToggle(
+
+	"Fly",
+
+	"Fly using WASD + Space / Shift",
+
+	false,
+
+	function(enabled)
+
+		FlyEnabled = enabled
+
+		if enabled then
+
+			StartFly()
+		else
+			StopFly()
+		end
+
+	end
+
+)
+
+--========================================================--
+-- SPEED INFO
+--========================================================--
+
+local SpeedPanel = Create("Frame", {
+
+	Name = "SpeedInfo",
+
+	Size = UDim2.new(1, 0, 0, 40),
+
+	BackgroundColor3 = CONFIG.PanelDark,
+
+	BorderSizePixel = 0,
+
+}, Content)
+
+AddCorner(SpeedPanel, 10)
+
+local SpeedText = Create("TextLabel", {
+
+	Size = UDim2.new(1, -20, 1, 0),
+
+	Position = UDim2.fromOffset(10, 0),
+
+	BackgroundTransparency = 1,
+
+	Text = "Fly Speed: 16",
+
+	TextColor3 = CONFIG.SubText,
+
+	TextSize = 11,
+
+	Font = Enum.Font.Gotham,
+
+	TextXAlignment = Enum.TextXAlignment.Left,
+
+}, SpeedPanel)
+
+--========================================================--
+-- DRAG WINDOW
+--========================================================--
+
+local Dragging = false
+local DragStart
+local StartPosition
+
+Header.InputBegan:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+		Dragging = true
+
+		DragStart = input.Position
+
+		StartPosition = Main.Position
+
+	end
+
+end)
+
+Header.InputEnded:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+		Dragging = false
+
+	end
+
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if not Dragging then
+		return
+	end
+
+	if input.UserInputType ~= Enum.UserInputType.MouseMovement
+		and input.UserInputType ~= Enum.UserInputType.Touch then
+		return
+	end
+
+	local Delta = input.Position - DragStart
+
+	Main.Position = UDim2.new(
+
+		StartPosition.X.Scale,
+
+		StartPosition.X.Offset + Delta.X,
+
+		StartPosition.Y.Scale,
+
+		StartPosition.Y.Offset + Delta.Y
+
+	)
+
+end)
+
+--========================================================--
+-- MAIN UPDATE LOOP
+--========================================================--
+
+local CollisionTimer = 0
+
+RunService.Heartbeat:Connect(function(deltaTime)
+
+	-- Water
+	if WalkOnWaterEnabled
+		and RootPart
+		and WaterPlatform then
+
+		if IsWaterBelow() then
+
+			WaterPlatform.CFrame =
+				CFrame.new(
+					RootPart.Position.X,
+					RootPart.Position.Y + CONFIG.WaterPlatformOffset,
+					RootPart.Position.Z
+				)
+
+		else
+
+			WaterPlatform.CFrame =
+				CFrame.new(
+					RootPart.Position.X,
+					-1000,
+					RootPart.Position.Z
+				)
+
+		end
+
+	end
+
+	-- No Collision
+	if NoCollisionEnabled then
+
+		CollisionTimer += deltaTime
+
+		if CollisionTimer >= 0.15 then
+
+			CollisionTimer = 0
+
+			UpdateNoCollision()
+
+		end
+
+	end
+
+	-- Speed display
+	if Humanoid then
+
+		SpeedText.Text =
+			"Fly Speed: "
+			.. tostring(math.floor(GetMapSpeed()))
+
+	end
+
+end)
+
+--========================================================--
+-- CLEANUP ON RESPAWN
+--========================================================--
+
+Player.CharacterRemoving:Connect(function()
+
+	DestroyWaterPlatform()
+
+	StopFly()
+
+	RestoreCollision()
+
+end)
+
+--========================================================--
+-- FINISHED
+--========================================================--
+
+print("[Movement Control] Loaded successfully.")
