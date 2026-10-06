@@ -19,37 +19,27 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 local CONFIG = {
 
 	GuiName = "BowkaoNetworkDashboard",
-
 	-- Exact color system
 	MainColor = Color3.fromRGB(35, 37, 39),
 	PanelColor = Color3.fromRGB(46, 48, 51),
 	DarkPanelColor = Color3.fromRGB(25, 27, 29),
-
 	ButtonColor = Color3.fromRGB(55, 57, 60),
 	HoverColor = Color3.fromRGB(70, 72, 75),
 	PressedColor = Color3.fromRGB(85, 87, 90),
-
 	DividerColor = Color3.fromRGB(255, 255, 255),
-
 	TextColor = Color3.fromRGB(255, 255, 255),
 	SecondaryTextColor = Color3.fromRGB(180, 180, 180),
-
 	MainTransparency = 0.10,
 	PanelTransparency = 0.08,
 	DarkPanelTransparency = 0.08,
 	ButtonTransparency = 0.05,
-
 	DividerTransparency = 0.88,
-
 	CornerRadius = 8,
-
 	-- Compact size
 	Width = 270,
 	Height = 158,
-
 	-- Position
 	Position = UDim2.new(0, 14, 0, 14),
-
 	-- Update
 	UpdateRate = 0.25,
 }
@@ -98,7 +88,6 @@ end
 
 local function createLabel(parent, text, size, position, fontSize)
 	local label = Instance.new("TextLabel")
-
 	label.BackgroundTransparency = 1
 	label.Text = text
 	label.TextColor3 = CONFIG.TextColor
@@ -106,11 +95,9 @@ local function createLabel(parent, text, size, position, fontSize)
 	label.Font = Enum.Font.Gotham
 	label.TextXAlignment = Enum.TextXAlignment.Left
 	label.TextYAlignment = Enum.TextYAlignment.Center
-
 	label.Size = size
 	label.Position = position
 	label.Parent = parent
-
 	return label
 end
 
@@ -262,20 +249,14 @@ Content.Parent = Main
 local function createCard(name, x, y, width, height)
 
 	local Card = Instance.new("Frame")
-
 	Card.Name = name
-
 	Card.Size = UDim2.fromOffset(width, height)
 	Card.Position = UDim2.fromOffset(x, y)
-
 	Card.BackgroundColor3 = CONFIG.PanelColor
 	Card.BackgroundTransparency = CONFIG.PanelTransparency
-
 	Card.BorderSizePixel = 0
 	Card.Parent = Content
-
 	corner(Card, 7)
-
 	return Card
 end
 
@@ -438,13 +419,10 @@ local function getPingColor(ping)
 
 	if ping <= 50 then
 		return Color3.fromRGB(100, 255, 130), "EXCELLENT"
-
 	elseif ping <= 100 then
 		return Color3.fromRGB(255, 220, 80), "GOOD"
-
 	elseif ping <= 200 then
 		return Color3.fromRGB(255, 155, 70), "HIGH"
-
 	else
 		return Color3.fromRGB(255, 80, 80), "VERY HIGH"
 	end
@@ -458,31 +436,21 @@ end
 local function getPing()
 
 	local success, result = pcall(function()
-
 		local network = Stats.Network
 		local serverStats = network.ServerStatsItem
-
 		local pingItem =
 			serverStats:FindFirstChild("Data Ping")
-
 		if pingItem then
-
 			local value = pingItem:GetValue()
-
 			if typeof(value) == "number" then
 				return math.floor(value)
 			end
-
 		end
-
 		return nil
-
 	end)
-
 	if success then
 		return result
 	end
-
 	return nil
 end
 
@@ -498,16 +466,12 @@ RunService.RenderStepped:Connect(function(deltaTime)
 
 	frameCounter += 1
 	fpsTimer += deltaTime
-
 	if fpsTimer >= 0.5 then
-
 		fps = math.floor(
 			frameCounter / fpsTimer + 0.5
 		)
-
 		frameCounter = 0
 		fpsTimer = 0
-
 	end
 
 end)
@@ -519,73 +483,49 @@ end)
 task.spawn(function()
 
 	while ScreenGui.Parent do
-
 		-- Ping
 		local ping = getPing()
-
 		if ping then
-
 			local color, status = getPingColor(ping)
-
 			PingValue.Text = tostring(ping) .. " ms"
 			PingValue.TextColor3 = color
-
 			StatusDot.BackgroundColor3 = color
-
 		else
-
 			PingValue.Text = "-- ms"
 			PingValue.TextColor3 = CONFIG.TextColor
-
 			StatusDot.BackgroundColor3 =
 				Color3.fromRGB(180, 180, 180)
-
 		end
-
 		-- FPS
 		FPSValue.Text = tostring(fps)
-
 		if fps >= 55 then
 			FPSValue.TextColor3 =
 				Color3.fromRGB(100, 255, 130)
-
 		elseif fps >= 30 then
 			FPSValue.TextColor3 =
 				Color3.fromRGB(255, 220, 80)
-
 		else
 			FPSValue.TextColor3 =
 				Color3.fromRGB(255, 80, 80)
 		end
-
 		-- Players
 		local playerCount = #Players:GetPlayers()
-
 		PlayersValue.Text =
 			tostring(playerCount) .. " / " ..
 			tostring(Players.MaxPlayers)
-
 		-- Server
 		if game:IsLoaded() then
-
 			ConnectionValue.Text = "CONNECTED"
 			ConnectionValue.TextColor3 =
 				Color3.fromRGB(100, 255, 130)
-
 			StatusText.Text = "SERVER CONNECTED"
-
 		else
-
 			ConnectionValue.Text = "CONNECTING"
 			ConnectionValue.TextColor3 =
 				Color3.fromRGB(255, 220, 80)
-
 			StatusText.Text = "CONNECTING..."
-
 		end
-
 		task.wait(CONFIG.UpdateRate)
-
 	end
 
 end)
@@ -597,35 +537,24 @@ end)
 local function setupButton(button)
 
 	button.MouseEnter:Connect(function()
-
 		tween(button, {
 			BackgroundColor3 = CONFIG.HoverColor
 		})
-
 	end)
-
 	button.MouseLeave:Connect(function()
-
 		tween(button, {
 			BackgroundColor3 = CONFIG.ButtonColor
 		})
-
 	end)
-
 	button.MouseButton1Down:Connect(function()
-
 		tween(button, {
 			BackgroundColor3 = CONFIG.PressedColor
 		})
-
 	end)
-
 	button.MouseButton1Up:Connect(function()
-
 		tween(button, {
 			BackgroundColor3 = CONFIG.HoverColor
 		})
-
 	end)
 
 end
@@ -645,11 +574,8 @@ local OriginalSize =
 Collapse.MouseButton1Click:Connect(function()
 
 	collapsed = not collapsed
-
 	if collapsed then
-
 		Content.Visible = false
-
 		tween(
 			Main,
 			{
@@ -660,11 +586,8 @@ Collapse.MouseButton1Click:Connect(function()
 			},
 			0.18
 		)
-
 		Collapse.Text = "+"
-
 	else
-
 		tween(
 			Main,
 			{
@@ -672,17 +595,12 @@ Collapse.MouseButton1Click:Connect(function()
 			},
 			0.18
 		)
-
 		task.delay(0.1, function()
-
 			if not collapsed then
 				Content.Visible = true
 			end
-
 		end)
-
 		Collapse.Text = "—"
-
 	end
 
 end)
@@ -824,7 +742,6 @@ local startPosition
 local function updateDrag(input)
 
 	local delta = input.Position - dragStart
-
 	Main.Position = UDim2.new(
 		startPosition.X.Scale,
 		startPosition.X.Offset + delta.X,
@@ -838,23 +755,15 @@ Header.InputBegan:Connect(function(input)
 
 	if input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.Touch then
-
 		dragging = true
-
 		dragStart = input.Position
 		startPosition = Main.Position
-
 		input.Changed:Connect(function()
-
 			if input.UserInputState ==
 				Enum.UserInputState.End then
-
 				dragging = false
-
 			end
-
 		end)
-
 	end
 
 end)
@@ -865,9 +774,7 @@ UserInputService.InputChanged:Connect(function(input)
 		input.UserInputType == Enum.UserInputType.MouseMovement
 		or input.UserInputType == Enum.UserInputType.Touch
 	) then
-
 		updateDrag(input)
-
 	end
 
 end)
@@ -883,21 +790,13 @@ local function updateScale()
 	if not Camera then
 		return
 	end
-
 	local viewport = Camera.ViewportSize
-
 	if viewport.X <= 500 then
-
 		UIScale.Scale = 0.88
-
 	elseif viewport.X <= 800 then
-
 		UIScale.Scale = 0.94
-
 	else
-
 		UIScale.Scale = 1
-
 	end
 
 end
@@ -906,7 +805,6 @@ if Camera then
 
 	Camera:GetPropertyChangedSignal("ViewportSize")
 		:Connect(updateScale)
-
 	updateScale()
 
 end
