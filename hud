@@ -1,0 +1,239 @@
+--// Player Profile HUD
+--// Optimized LocalScript
+
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+--==================================================
+-- CONFIG
+--==================================================
+
+local CONFIG = {
+	GuiName = "PlayerProfileHUD",
+
+	Position = UDim2.fromOffset(10, 10),
+	Size = UDim2.fromOffset(152, 56),
+
+	BackgroundColor = Color3.fromRGB(33, 33, 33),
+	StrokeColor = Color3.fromRGB(44, 44, 44),
+	TextColor = Color3.fromRGB(220, 220, 220),
+
+	CornerRadius = 8,
+	AvatarCornerRadius = 6,
+
+	AvatarSize = 48,
+	AvatarPadding = 4,
+
+	Font = Enum.Font.Gotham,
+	TextSize = 9,
+}
+
+--==================================================
+-- REMOVE OLD GUI
+--==================================================
+
+local oldGui = playerGui:FindFirstChild(CONFIG.GuiName)
+
+if oldGui then
+	oldGui:Destroy()
+end
+
+--==================================================
+-- SCREEN GUI
+--==================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = CONFIG.GuiName
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = playerGui
+
+--==================================================
+-- MAIN FRAME
+--==================================================
+
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = CONFIG.Size
+main.Position = CONFIG.Position
+
+main.BackgroundColor3 = CONFIG.BackgroundColor
+main.BackgroundTransparency = 0
+
+main.BorderSizePixel = 0
+
+main.Parent = gui
+
+-- Rounded corners
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, CONFIG.CornerRadius)
+mainCorner.Parent = main
+
+-- Border
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Name = "Border"
+mainStroke.Color = CONFIG.StrokeColor
+mainStroke.Thickness = 1
+mainStroke.Transparency = 0
+mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+mainStroke.Parent = main
+
+--==================================================
+-- AVATAR
+--==================================================
+
+local profile = Instance.new("ImageLabel")
+profile.Name = "Avatar"
+profile.Size = UDim2.fromOffset(
+	CONFIG.AvatarSize,
+	CONFIG.AvatarSize
+)
+
+profile.Position = UDim2.fromOffset(
+	CONFIG.AvatarPadding,
+	CONFIG.AvatarPadding
+)
+
+profile.BackgroundTransparency = 1
+profile.BorderSizePixel = 0
+profile.ScaleType = Enum.ScaleType.Crop
+
+profile.Image = ""
+
+profile.Parent = main
+
+-- Avatar rounded corners
+local profileCorner = Instance.new("UICorner")
+profileCorner.CornerRadius = UDim.new(0, CONFIG.AvatarCornerRadius)
+profileCorner.Parent = profile
+
+--==================================================
+-- INFORMATION CONTAINER
+--==================================================
+
+local info = Instance.new("Frame")
+info.Name = "Info"
+
+info.Size = UDim2.fromOffset(92, 48)
+info.Position = UDim2.fromOffset(56, 4)
+
+info.BackgroundTransparency = 1
+info.BorderSizePixel = 0
+
+info.Parent = main
+
+--==================================================
+-- TEXT CREATOR
+--==================================================
+
+local function createText(name, y)
+	local label = Instance.new("TextLabel")
+
+	label.Name = name
+
+	label.Size = UDim2.new(1, 0, 0, 11)
+	label.Position = UDim2.fromOffset(0, y)
+
+	label.BackgroundTransparency = 1
+	label.BorderSizePixel = 0
+
+	label.TextColor3 = CONFIG.TextColor
+	label.Font = CONFIG.Font
+	label.TextSize = CONFIG.TextSize
+
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Center
+
+	label.TextTruncate = Enum.TextTruncate.AtEnd
+
+	label.RichText = false
+
+	label.Parent = info
+
+	return label
+end
+
+--==================================================
+-- TEXT ELEMENTS
+--==================================================
+
+local nameText = createText("DisplayName", 0)
+local userText = createText("Username", 12)
+local dateText = createText("Date", 24)
+local timeText = createText("Time", 36)
+
+--==================================================
+-- PLAYER INFORMATION
+--==================================================
+
+nameText.Text = player.DisplayName
+userText.Text = "@" .. player.Name
+
+--==================================================
+-- AVATAR LOADING
+--==================================================
+
+task.spawn(function()
+
+	local success, image = pcall(function()
+
+		return Players:GetUserThumbnailAsync(
+			player.UserId,
+			Enum.ThumbnailType.HeadShot,
+			Enum.ThumbnailSize.Size100x100
+		)
+
+	end)
+
+	if success and image then
+		profile.Image = image
+	end
+
+end)
+
+--==================================================
+-- DATE / TIME
+--==================================================
+
+local function updateDateTime()
+
+	local t = os.date("*t")
+
+	dateText.Text = string.format(
+		"%02d/%02d/%04d",
+		t.day,
+		t.month,
+		t.year
+	)
+
+	timeText.Text = string.format(
+		"%02d:%02d:%02d",
+		t.hour,
+		t.min,
+		t.sec
+	)
+
+end
+
+-- Initial update
+updateDateTime()
+
+--==================================================
+-- REAL-TIME CLOCK
+--==================================================
+
+task.spawn(function()
+
+	while gui.Parent do
+
+		updateDateTime()
+
+		-- Wait until the next second
+		task.wait(1)
+
+	end
+
+end)
