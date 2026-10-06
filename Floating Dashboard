@@ -1,1026 +1,859 @@
---========================================================--
---        MOVEMENT CONTROL PANEL - ROBLOX STUDIO
---        Walk On Water / No Collision / Fly
---        Designed for your own Roblox experience
---========================================================--
+--// BOWKAO SCRIPT PREMIUM
+--// Compact Network Dashboard
+--// Real-time Information HUD
+--// UI Prototype / Information System
 
---// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
---// Player
 local Player = Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
 
---========================================================--
+--==================================================
 -- CONFIG
---========================================================--
+--==================================================
 
 local CONFIG = {
 
-	-- UI
-	GuiName = "MovementControlPanel",
+	GuiName = "BowkaoNetworkDashboard",
 
-	-- Default states
-	WalkOnWater = false,
-	NoCollision = false,
-	Fly = false,
+	-- Exact color system
+	MainColor = Color3.fromRGB(35, 37, 39),
+	PanelColor = Color3.fromRGB(46, 48, 51),
+	DarkPanelColor = Color3.fromRGB(25, 27, 29),
 
-	-- UI size
-	Width = 280,
-	Height = 285,
+	ButtonColor = Color3.fromRGB(55, 57, 60),
+	HoverColor = Color3.fromRGB(70, 72, 75),
+	PressedColor = Color3.fromRGB(85, 87, 90),
 
-	-- Fly
-	FlyMultiplier = 1,
+	DividerColor = Color3.fromRGB(255, 255, 255),
 
-	-- Water platform
-	WaterPlatformSize = Vector3.new(7, 0.25, 7),
-	WaterPlatformOffset = -3.15,
+	TextColor = Color3.fromRGB(255, 255, 255),
+	SecondaryTextColor = Color3.fromRGB(180, 180, 180),
 
-	-- No Collision
-	NoCollisionDistance = 35,
+	MainTransparency = 0.10,
+	PanelTransparency = 0.08,
+	DarkPanelTransparency = 0.08,
+	ButtonTransparency = 0.05,
 
-	-- UI
-	CornerRadius = 14,
+	DividerTransparency = 0.88,
 
-	-- Colors
-	Background = Color3.fromRGB(24, 25, 28),
-	Panel = Color3.fromRGB(32, 34, 38),
-	PanelDark = Color3.fromRGB(19, 20, 23),
-	Text = Color3.fromRGB(245, 245, 245),
-	SubText = Color3.fromRGB(160, 163, 170),
+	CornerRadius = 8,
 
-	On = Color3.fromRGB(65, 190, 115),
-	Off = Color3.fromRGB(75, 77, 83),
+	-- Compact size
+	Width = 270,
+	Height = 158,
 
-	Stroke = Color3.fromRGB(55, 58, 64),
+	-- Position
+	Position = UDim2.new(0, 14, 0, 14),
+
+	-- Update
+	UpdateRate = 0.25,
 }
 
---========================================================--
--- CHARACTER
---========================================================--
+--==================================================
+-- CLEAN OLD GUI
+--==================================================
 
-local Character
-local Humanoid
-local RootPart
+local old = PlayerGui:FindFirstChild(CONFIG.GuiName)
 
-local function SetupCharacter(char)
-
-	Character = char
-
-	Humanoid = char:WaitForChild("Humanoid")
-	RootPart = char:WaitForChild("HumanoidRootPart")
-
+if old then
+	old:Destroy()
 end
 
-if Player.Character then
-	SetupCharacter(Player.Character)
-end
-
-Player.CharacterAdded:Connect(function(char)
-
-	SetupCharacter(char)
-
-	task.wait(0.25)
-
-	if WalkOnWaterEnabled then
-		CreateWaterPlatform()
-	end
-
-end)
-
---========================================================--
--- STATE
---========================================================--
-
-local WalkOnWaterEnabled = false
-local NoCollisionEnabled = false
-local FlyEnabled = false
-
---========================================================--
+--==================================================
 -- HELPERS
---========================================================--
+--==================================================
 
-local function Create(className, properties, parent)
-
-	local object = Instance.new(className)
-
-	for property, value in pairs(properties) do
-		object[property] = value
-	end
-
-	object.Parent = parent
-
-	return object
-
+local function corner(parent, radius)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, radius or CONFIG.CornerRadius)
+	c.Parent = parent
+	return c
 end
 
-local function AddCorner(object, radius)
-
-	local corner = Instance.new("UICorner")
-
-	corner.CornerRadius = UDim.new(0, radius or CONFIG.CornerRadius)
-
-	corner.Parent = object
-
-	return corner
-
+local function stroke(parent, transparency)
+	local s = Instance.new("UIStroke")
+	s.Color = CONFIG.DividerColor
+	s.Transparency = transparency or CONFIG.DividerTransparency
+	s.Thickness = 1
+	s.Parent = parent
+	return s
 end
 
-local function AddStroke(object)
-
-	local stroke = Instance.new("UIStroke")
-
-	stroke.Color = CONFIG.Stroke
-	stroke.Thickness = 1
-
-	stroke.Transparency = 0.15
-
-	stroke.Parent = object
-
-	return stroke
-
+local function tween(object, properties, duration)
+	TweenService:Create(
+		object,
+		TweenInfo.new(
+			duration or 0.12,
+			Enum.EasingStyle.Quart,
+			Enum.EasingDirection.Out
+		),
+		properties
+	):Play()
 end
 
---========================================================--
+local function createLabel(parent, text, size, position, fontSize)
+	local label = Instance.new("TextLabel")
+
+	label.BackgroundTransparency = 1
+	label.Text = text
+	label.TextColor3 = CONFIG.TextColor
+	label.TextSize = fontSize or 12
+	label.Font = Enum.Font.Gotham
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Center
+
+	label.Size = size
+	label.Position = position
+	label.Parent = parent
+
+	return label
+end
+
+--==================================================
 -- GUI
---========================================================--
+--==================================================
 
-local PlayerGui = Player:WaitForChild("PlayerGui")
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = CONFIG.GuiName
+ScreenGui.ResetOnSpawn = false
+ScreenGui.IgnoreGuiInset = true
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = PlayerGui
 
-local OldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
+--==================================================
+-- SCALE
+--==================================================
 
-if OldGui then
-	OldGui:Destroy()
-end
+local UIScale = Instance.new("UIScale")
+UIScale.Scale = 1
+UIScale.Parent = ScreenGui
 
-local ScreenGui = Create("ScreenGui", {
+--==================================================
+-- MAIN
+--==================================================
 
-	Name = CONFIG.GuiName,
+local Main = Instance.new("Frame")
 
-	ResetOnSpawn = false,
+Main.Name = "Main"
+Main.Size = UDim2.fromOffset(CONFIG.Width, CONFIG.Height)
+Main.Position = CONFIG.Position
 
-	IgnoreGuiInset = true,
+Main.BackgroundColor3 = CONFIG.MainColor
+Main.BackgroundTransparency = CONFIG.MainTransparency
 
-	ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
 
-}, PlayerGui)
+corner(Main, CONFIG.CornerRadius)
+stroke(Main)
 
---========================================================--
--- MAIN WINDOW
---========================================================--
-
-local Main = Create("Frame", {
-
-	Name = "Main",
-
-	Size = UDim2.fromOffset(CONFIG.Width, CONFIG.Height),
-
-	Position = UDim2.new(0, 25, 0.5, -CONFIG.Height / 2),
-
-	BackgroundColor3 = CONFIG.Background,
-
-	BorderSizePixel = 0,
-
-}, ScreenGui)
-
-AddCorner(Main, CONFIG.CornerRadius)
-AddStroke(Main)
-
--- Shadow
-local Shadow = Create("ImageLabel", {
-
-	Name = "Shadow",
-
-	BackgroundTransparency = 1,
-
-	Size = UDim2.new(1, 40, 1, 40),
-
-	Position = UDim2.fromOffset(-20, -20),
-
-	Image = "rbxassetid://1316045217",
-
-	ImageTransparency = 0.55,
-
-	ScaleType = Enum.ScaleType.Slice,
-
-	SliceCenter = Rect.new(10, 10, 118, 118),
-
-	ZIndex = 0,
-
-}, Main)
-
-Main.ZIndex = 2
-
---========================================================--
+--==================================================
 -- HEADER
---========================================================--
+--==================================================
 
-local Header = Create("Frame", {
+local Header = Instance.new("Frame")
 
-	Name = "Header",
+Header.Name = "Header"
+Header.Size = UDim2.new(1, -12, 0, 38)
+Header.Position = UDim2.fromOffset(6, 6)
 
-	Size = UDim2.new(1, 0, 0, 64),
+Header.BackgroundColor3 = CONFIG.DarkPanelColor
+Header.BackgroundTransparency = CONFIG.DarkPanelTransparency
 
-	BackgroundTransparency = 1,
+Header.BorderSizePixel = 0
+Header.Parent = Main
 
-}, Main)
+corner(Header, 7)
 
-local Title = Create("TextLabel", {
+-- Title
+local Title = createLabel(
+	Header,
+	"BOWKAO SCRIPT",
+	UDim2.new(1, -78, 0, 17),
+	UDim2.fromOffset(10, 3),
+	11
+)
 
-	Name = "Title",
+Title.Font = Enum.Font.GothamBold
 
-	Size = UDim2.new(1, -30, 0, 27),
+local Subtitle = createLabel(
+	Header,
+	"PREMIUM  •  NETWORK",
+	UDim2.new(1, -78, 0, 14),
+	UDim2.fromOffset(10, 20),
+	8
+)
 
-	Position = UDim2.fromOffset(15, 9),
+Subtitle.TextColor3 = CONFIG.SecondaryTextColor
+Subtitle.TextTransparency = 0.10
 
-	BackgroundTransparency = 1,
+--==================================================
+-- COLLAPSE BUTTON
+--==================================================
 
-	Text = "Movement Control",
+local Collapse = Instance.new("TextButton")
 
-	TextColor3 = CONFIG.Text,
+Collapse.Name = "Collapse"
+Collapse.Size = UDim2.fromOffset(26, 26)
+Collapse.Position = UDim2.new(1, -60, 0, 6)
 
-	TextSize = 19,
+Collapse.BackgroundColor3 = CONFIG.ButtonColor
+Collapse.BackgroundTransparency = CONFIG.ButtonTransparency
 
-	Font = Enum.Font.GothamBold,
+Collapse.Text = "—"
+Collapse.TextColor3 = CONFIG.TextColor
+Collapse.TextSize = 14
+Collapse.Font = Enum.Font.GothamBold
 
-	TextXAlignment = Enum.TextXAlignment.Left,
+Collapse.AutoButtonColor = false
+Collapse.BorderSizePixel = 0
 
-}, Header)
+Collapse.Parent = Header
 
-local Subtitle = Create("TextLabel", {
+corner(Collapse, 6)
 
-	Name = "Subtitle",
+--==================================================
+-- CLOSE BUTTON
+--==================================================
 
-	Size = UDim2.new(1, -30, 0, 20),
+local Close = Instance.new("TextButton")
 
-	Position = UDim2.fromOffset(15, 35),
+Close.Name = "Close"
+Close.Size = UDim2.fromOffset(26, 26)
+Close.Position = UDim2.new(1, -31, 0, 6)
 
-	BackgroundTransparency = 1,
+Close.BackgroundColor3 = CONFIG.ButtonColor
+Close.BackgroundTransparency = CONFIG.ButtonTransparency
 
-	Text = "Movement utilities",
+Close.Text = "×"
+Close.TextColor3 = CONFIG.TextColor
+Close.TextSize = 16
+Close.Font = Enum.Font.GothamBold
 
-	TextColor3 = CONFIG.SubText,
+Close.AutoButtonColor = false
+Close.BorderSizePixel = 0
 
-	TextSize = 12,
+Close.Parent = Header
 
-	Font = Enum.Font.Gotham,
+corner(Close, 6)
 
-	TextXAlignment = Enum.TextXAlignment.Left,
-
-}, Header)
-
---========================================================--
+--==================================================
 -- CONTENT
---========================================================--
+--==================================================
 
-local Content = Create("Frame", {
+local Content = Instance.new("Frame")
 
-	Name = "Content",
+Content.Name = "Content"
+Content.Size = UDim2.new(1, -12, 1, -50)
+Content.Position = UDim2.fromOffset(6, 44)
 
-	Size = UDim2.new(1, -24, 1, -72),
+Content.BackgroundTransparency = 1
+Content.Parent = Main
 
-	Position = UDim2.fromOffset(12, 65),
+--==================================================
+-- INFORMATION CARDS
+--==================================================
 
-	BackgroundTransparency = 1,
+local function createCard(name, x, y, width, height)
 
-}, Main)
+	local Card = Instance.new("Frame")
 
-local Layout = Create("UIListLayout", {
+	Card.Name = name
 
-	Padding = UDim.new(0, 8),
+	Card.Size = UDim2.fromOffset(width, height)
+	Card.Position = UDim2.fromOffset(x, y)
 
-	SortOrder = Enum.SortOrder.LayoutOrder,
+	Card.BackgroundColor3 = CONFIG.PanelColor
+	Card.BackgroundTransparency = CONFIG.PanelTransparency
 
-}, Content)
+	Card.BorderSizePixel = 0
+	Card.Parent = Content
 
---========================================================--
--- WATER SYSTEM
---========================================================--
+	corner(Card, 7)
 
-local WaterPlatform
+	return Card
+end
 
-local function DestroyWaterPlatform()
+-- Ping
+local PingCard = createCard(
+	"Ping",
+	0,
+	0,
+	126,
+	49
+)
 
-	if WaterPlatform then
+local PingTitle = createLabel(
+	PingCard,
+	"PING",
+	UDim2.new(1, -16, 0, 15),
+	UDim2.fromOffset(8, 4),
+	8
+)
 
-		WaterPlatform:Destroy()
+PingTitle.TextColor3 = CONFIG.SecondaryTextColor
 
-		WaterPlatform = nil
+local PingValue = createLabel(
+	PingCard,
+	"-- ms",
+	UDim2.new(1, -16, 0, 24),
+	UDim2.fromOffset(8, 18),
+	16
+)
 
+PingValue.Font = Enum.Font.GothamBold
+
+-- FPS
+local FPSCard = createCard(
+	"FPS",
+	132,
+	0,
+	126,
+	49
+)
+
+local FPSTitle = createLabel(
+	FPSCard,
+	"FPS",
+	UDim2.new(1, -16, 0, 15),
+	UDim2.fromOffset(8, 4),
+	8
+)
+
+FPSTitle.TextColor3 = CONFIG.SecondaryTextColor
+
+local FPSValue = createLabel(
+	FPSCard,
+	"--",
+	UDim2.new(1, -16, 0, 24),
+	UDim2.fromOffset(8, 18),
+	16
+)
+
+FPSValue.Font = Enum.Font.GothamBold
+
+-- Connection
+local ConnectionCard = createCard(
+	"Connection",
+	0,
+	55,
+	126,
+	49
+)
+
+local ConnectionTitle = createLabel(
+	ConnectionCard,
+	"CONNECTION",
+	UDim2.new(1, -16, 0, 15),
+	UDim2.fromOffset(8, 4),
+	8
+)
+
+ConnectionTitle.TextColor3 = CONFIG.SecondaryTextColor
+
+local ConnectionValue = createLabel(
+	ConnectionCard,
+	"CONNECTED",
+	UDim2.new(1, -16, 0, 24),
+	UDim2.fromOffset(8, 18),
+	11
+)
+
+ConnectionValue.Font = Enum.Font.GothamBold
+
+-- Players
+local PlayersCard = createCard(
+	"Players",
+	132,
+	55,
+	126,
+	49
+)
+
+local PlayersTitle = createLabel(
+	PlayersCard,
+	"PLAYERS",
+	UDim2.new(1, -16, 0, 15),
+	UDim2.fromOffset(8, 4),
+	8
+)
+
+PlayersTitle.TextColor3 = CONFIG.SecondaryTextColor
+
+local PlayersValue = createLabel(
+	PlayersCard,
+	"0 / 0",
+	UDim2.new(1, -16, 0, 24),
+	UDim2.fromOffset(8, 18),
+	13
+)
+
+PlayersValue.Font = Enum.Font.GothamBold
+
+--==================================================
+-- STATUS BAR
+--==================================================
+
+local Status = Instance.new("Frame")
+
+Status.Name = "Status"
+
+Status.Size = UDim2.new(1, 0, 0, 18)
+Status.Position = UDim2.fromOffset(0, 111)
+
+Status.BackgroundTransparency = 1
+Status.Parent = Content
+
+local StatusDot = Instance.new("Frame")
+
+StatusDot.Size = UDim2.fromOffset(6, 6)
+StatusDot.Position = UDim2.fromOffset(2, 6)
+
+StatusDot.BackgroundColor3 = Color3.fromRGB(100, 255, 130)
+StatusDot.BorderSizePixel = 0
+StatusDot.Parent = Status
+
+corner(StatusDot, 6)
+
+local StatusText = createLabel(
+	Status,
+	"SERVER CONNECTED",
+	UDim2.new(1, -14, 1, 0),
+	UDim2.fromOffset(12, 0),
+	8
+)
+
+StatusText.TextColor3 = CONFIG.SecondaryTextColor
+
+--==================================================
+-- PING COLOR SYSTEM
+--==================================================
+
+local function getPingColor(ping)
+
+	if ping <= 50 then
+		return Color3.fromRGB(100, 255, 130), "EXCELLENT"
+
+	elseif ping <= 100 then
+		return Color3.fromRGB(255, 220, 80), "GOOD"
+
+	elseif ping <= 200 then
+		return Color3.fromRGB(255, 155, 70), "HIGH"
+
+	else
+		return Color3.fromRGB(255, 80, 80), "VERY HIGH"
 	end
 
 end
 
-function CreateWaterPlatform()
+--==================================================
+-- GET PING
+--==================================================
 
-	if not Character or not RootPart then
-		return
-	end
+local function getPing()
 
-	DestroyWaterPlatform()
+	local success, result = pcall(function()
 
-	WaterPlatform = Instance.new("Part")
+		local network = Stats.Network
+		local serverStats = network.ServerStatsItem
 
-	WaterPlatform.Name = "LocalWaterPlatform"
+		local pingItem =
+			serverStats:FindFirstChild("Data Ping")
 
-	WaterPlatform.Size = CONFIG.WaterPlatformSize
+		if pingItem then
 
-	WaterPlatform.Anchored = true
+			local value = pingItem:GetValue()
 
-	WaterPlatform.CanCollide = true
-
-	WaterPlatform.CanTouch = false
-
-	WaterPlatform.CanQuery = false
-
-	WaterPlatform.Transparency = 1
-
-	WaterPlatform.CastShadow = false
-
-	WaterPlatform.Parent = Workspace
-
-end
-
-local function IsWaterBelow()
-
-	if not RootPart then
-		return false
-	end
-
-	local Origin = RootPart.Position + Vector3.new(0, 2, 0)
-
-	local Direction = Vector3.new(0, -12, 0)
-
-	local Params = RaycastParams.new()
-
-	Params.FilterType = Enum.RaycastFilterType.Exclude
-
-	Params.FilterDescendantsInstances = {
-		Character,
-		WaterPlatform
-	}
-
-	local Result = Workspace:Raycast(
-		Origin,
-		Direction,
-		Params
-	)
-
-	if not Result then
-		return false
-	end
-
-	return Result.Material == Enum.Material.Water
-
-end
-
---========================================================--
--- NO COLLISION
---========================================================--
-
-local OriginalCollision = {}
-
-local function SaveCollision(part)
-
-	if OriginalCollision[part] == nil then
-
-		OriginalCollision[part] = part.CanCollide
-
-	end
-
-end
-
-local function RestoreCollision()
-
-	for part, originalValue in pairs(OriginalCollision) do
-
-		if part and part.Parent then
-
-			part.CanCollide = originalValue
-
-		end
-
-	end
-
-	table.clear(OriginalCollision)
-
-end
-
-local function UpdateNoCollision()
-
-	if not NoCollisionEnabled then
-
-		RestoreCollision()
-
-		return
-
-	end
-
-	if not RootPart then
-		return
-	end
-
-	local OverlapParams = OverlapParams.new()
-
-	OverlapParams.FilterType = Enum.RaycastFilterType.Exclude
-
-	OverlapParams.FilterDescendantsInstances = {
-		Character,
-		WaterPlatform
-	}
-
-	local Parts = Workspace:GetPartBoundsInRadius(
-		RootPart.Position,
-		CONFIG.NoCollisionDistance,
-		OverlapParams
-	)
-
-	for _, part in ipairs(Parts) do
-
-		if part:IsA("BasePart")
-			and part.Parent
-			and not part:IsDescendantOf(Character)
-			and part ~= WaterPlatform then
-
-			SaveCollision(part)
-
-			-- Don't disable terrain-like floor parts.
-			-- Parts positioned underneath the player remain collidable.
-			local relativeY = part.Position.Y - RootPart.Position.Y
-
-			if relativeY > -4 then
-
-				part.CanCollide = false
-
+			if typeof(value) == "number" then
+				return math.floor(value)
 			end
 
 		end
 
-	end
-
-end
-
---========================================================--
--- FLY SYSTEM
---========================================================--
-
-local FlyConnection
-
-local BodyVelocity
-local BodyGyro
-
-local FlyingKeys = {
-
-	W = false,
-	A = false,
-	S = false,
-	D = false,
-	Space = false,
-	Shift = false,
-
-}
-
-local function DestroyFlyObjects()
-
-	if FlyConnection then
-
-		FlyConnection:Disconnect()
-
-		FlyConnection = nil
-
-	end
-
-	if BodyVelocity then
-
-		BodyVelocity:Destroy()
-
-		BodyVelocity = nil
-
-	end
-
-	if BodyGyro then
-
-		BodyGyro:Destroy()
-
-		BodyGyro = nil
-
-	end
-
-	if Humanoid then
-
-		Humanoid.AutoRotate = true
-
-	end
-
-end
-
-local function GetMapSpeed()
-
-	if not Humanoid then
-		return 16
-	end
-
-	return math.max(
-		Humanoid.WalkSpeed * CONFIG.FlyMultiplier,
-		1
-	)
-
-end
-
-local function StartFly()
-
-	if not Character or not RootPart or not Humanoid then
-		return
-	end
-
-	DestroyFlyObjects()
-
-	Humanoid.AutoRotate = false
-
-	BodyVelocity = Instance.new("BodyVelocity")
-
-	BodyVelocity.Name = "MovementFlyVelocity"
-
-	BodyVelocity.MaxForce = Vector3.new(
-		math.huge,
-		math.huge,
-		math.huge
-	)
-
-	BodyVelocity.P = 10000
-
-	BodyVelocity.Velocity = Vector3.zero
-
-	BodyVelocity.Parent = RootPart
-
-	BodyGyro = Instance.new("BodyGyro")
-
-	BodyGyro.Name = "MovementFlyGyro"
-
-	BodyGyro.MaxTorque = Vector3.new(
-		math.huge,
-		math.huge,
-		math.huge
-	)
-
-	BodyGyro.P = 10000
-
-	BodyGyro.CFrame = RootPart.CFrame
-
-	BodyGyro.Parent = RootPart
-
-	FlyConnection = RunService.RenderStepped:Connect(function()
-
-		if not FlyEnabled then
-			return
-		end
-
-		if not RootPart or not RootPart.Parent then
-			return
-		end
-
-		local Camera = Workspace.CurrentCamera
-
-		if not Camera then
-			return
-		end
-
-		local MoveDirection = Vector3.zero
-
-		local Forward = Camera.CFrame.LookVector
-
-		local Right = Camera.CFrame.RightVector
-
-		Forward = Vector3.new(
-			Forward.X,
-			0,
-			Forward.Z
-		)
-
-		Right = Vector3.new(
-			Right.X,
-			0,
-			Right.Z
-		)
-
-		if Forward.Magnitude > 0 then
-			Forward = Forward.Unit
-		end
-
-		if Right.Magnitude > 0 then
-			Right = Right.Unit
-		end
-
-		if FlyingKeys.W then
-			MoveDirection += Forward
-		end
-
-		if FlyingKeys.S then
-			MoveDirection -= Forward
-		end
-
-		if FlyingKeys.D then
-			MoveDirection += Right
-		end
-
-		if FlyingKeys.A then
-			MoveDirection -= Right
-		end
-
-		if FlyingKeys.Space then
-			MoveDirection += Vector3.new(0, 1, 0)
-		end
-
-		if FlyingKeys.Shift then
-			MoveDirection -= Vector3.new(0, 1, 0)
-		end
-
-		if MoveDirection.Magnitude > 0 then
-
-			MoveDirection = MoveDirection.Unit
-
-			BodyVelocity.Velocity =
-				MoveDirection * GetMapSpeed()
-
-		else
-
-			BodyVelocity.Velocity = Vector3.zero
-
-		end
-
-		BodyGyro.CFrame = CFrame.lookAt(
-			RootPart.Position,
-			RootPart.Position + Camera.CFrame.LookVector
-		)
+		return nil
 
 	end)
 
-end
-
-local function StopFly()
-
-	DestroyFlyObjects()
-
-end
-
---========================================================--
--- INPUT
---========================================================--
-
-UserInputService.InputBegan:Connect(function(input, processed)
-
-	if processed then
-		return
+	if success then
+		return result
 	end
 
-	if input.KeyCode == Enum.KeyCode.W then
-		FlyingKeys.W = true
+	return nil
+end
 
-	elseif input.KeyCode == Enum.KeyCode.A then
-		FlyingKeys.A = true
+--==================================================
+-- FPS
+--==================================================
 
-	elseif input.KeyCode == Enum.KeyCode.S then
-		FlyingKeys.S = true
+local fps = 60
+local frameCounter = 0
+local fpsTimer = 0
 
-	elseif input.KeyCode == Enum.KeyCode.D then
-		FlyingKeys.D = true
+RunService.RenderStepped:Connect(function(deltaTime)
 
-	elseif input.KeyCode == Enum.KeyCode.Space then
-		FlyingKeys.Space = true
+	frameCounter += 1
+	fpsTimer += deltaTime
 
-	elseif input.KeyCode == Enum.KeyCode.LeftShift then
-		FlyingKeys.Shift = true
+	if fpsTimer >= 0.5 then
+
+		fps = math.floor(
+			frameCounter / fpsTimer + 0.5
+		)
+
+		frameCounter = 0
+		fpsTimer = 0
 
 	end
 
 end)
 
-UserInputService.InputEnded:Connect(function(input)
+--==================================================
+-- REAL-TIME UPDATE
+--==================================================
 
-	if input.KeyCode == Enum.KeyCode.W then
-		FlyingKeys.W = false
+task.spawn(function()
 
-	elseif input.KeyCode == Enum.KeyCode.A then
-		FlyingKeys.A = false
+	while ScreenGui.Parent do
 
-	elseif input.KeyCode == Enum.KeyCode.S then
-		FlyingKeys.S = false
+		-- Ping
+		local ping = getPing()
 
-	elseif input.KeyCode == Enum.KeyCode.D then
-		FlyingKeys.D = false
+		if ping then
 
-	elseif input.KeyCode == Enum.KeyCode.Space then
-		FlyingKeys.Space = false
+			local color, status = getPingColor(ping)
 
-	elseif input.KeyCode == Enum.KeyCode.LeftShift then
-		FlyingKeys.Shift = false
+			PingValue.Text = tostring(ping) .. " ms"
+			PingValue.TextColor3 = color
+
+			StatusDot.BackgroundColor3 = color
+
+		else
+
+			PingValue.Text = "-- ms"
+			PingValue.TextColor3 = CONFIG.TextColor
+
+			StatusDot.BackgroundColor3 =
+				Color3.fromRGB(180, 180, 180)
+
+		end
+
+		-- FPS
+		FPSValue.Text = tostring(fps)
+
+		if fps >= 55 then
+			FPSValue.TextColor3 =
+				Color3.fromRGB(100, 255, 130)
+
+		elseif fps >= 30 then
+			FPSValue.TextColor3 =
+				Color3.fromRGB(255, 220, 80)
+
+		else
+			FPSValue.TextColor3 =
+				Color3.fromRGB(255, 80, 80)
+		end
+
+		-- Players
+		local playerCount = #Players:GetPlayers()
+
+		PlayersValue.Text =
+			tostring(playerCount) .. " / " ..
+			tostring(Players.MaxPlayers)
+
+		-- Server
+		if game:IsLoaded() then
+
+			ConnectionValue.Text = "CONNECTED"
+			ConnectionValue.TextColor3 =
+				Color3.fromRGB(100, 255, 130)
+
+			StatusText.Text = "SERVER CONNECTED"
+
+		else
+
+			ConnectionValue.Text = "CONNECTING"
+			ConnectionValue.TextColor3 =
+				Color3.fromRGB(255, 220, 80)
+
+			StatusText.Text = "CONNECTING..."
+
+		end
+
+		task.wait(CONFIG.UpdateRate)
 
 	end
 
 end)
 
---========================================================--
--- TOGGLE BUTTON
---========================================================--
+--==================================================
+-- BUTTON HOVER
+--==================================================
 
-local function CreateToggle(
-	name,
-	description,
-	defaultState,
-	callback
-)
+local function setupButton(button)
 
-	local Button = Create("TextButton", {
+	button.MouseEnter:Connect(function()
 
-		Name = name,
-
-		Size = UDim2.new(1, 0, 0, 58),
-
-		BackgroundColor3 = CONFIG.Panel,
-
-		BorderSizePixel = 0,
-
-		AutoButtonColor = false,
-
-		Text = "",
-
-	}, Content)
-
-	AddCorner(Button, 11)
-	AddStroke(Button)
-
-	local NameLabel = Create("TextLabel", {
-
-		Name = "Name",
-
-		Size = UDim2.new(1, -85, 0, 22),
-
-		Position = UDim2.fromOffset(13, 8),
-
-		BackgroundTransparency = 1,
-
-		Text = name,
-
-		TextColor3 = CONFIG.Text,
-
-		TextSize = 14,
-
-		Font = Enum.Font.GothamMedium,
-
-		TextXAlignment = Enum.TextXAlignment.Left,
-
-	}, Button)
-
-	local DescriptionLabel = Create("TextLabel", {
-
-		Name = "Description",
-
-		Size = UDim2.new(1, -85, 0, 18),
-
-		Position = UDim2.fromOffset(13, 30),
-
-		BackgroundTransparency = 1,
-
-		Text = description,
-
-		TextColor3 = CONFIG.SubText,
-
-		TextSize = 10,
-
-		Font = Enum.Font.Gotham,
-
-		TextXAlignment = Enum.TextXAlignment.Left,
-
-	}, Button)
-
-	local Status = Create("TextLabel", {
-
-		Name = "Status",
-
-		Size = UDim2.fromOffset(58, 29),
-
-		Position = UDim2.new(1, -69, 0.5, -14),
-
-		BackgroundColor3 = CONFIG.Off,
-
-		BorderSizePixel = 0,
-
-		Text = "OFF",
-
-		TextColor3 = CONFIG.Text,
-
-		TextSize = 10,
-
-		Font = Enum.Font.GothamBold,
-
-	}, Button)
-
-	AddCorner(Status, 8)
-
-	local Enabled = defaultState
-
-	local function Refresh()
-
-		if Enabled then
-
-			Status.Text = "ON"
-
-			Status.BackgroundColor3 = CONFIG.On
-
-			Button.BackgroundColor3 =
-				Color3.fromRGB(35, 39, 39)
-
-		else
-
-			Status.Text = "OFF"
-
-			Status.BackgroundColor3 = CONFIG.Off
-
-			Button.BackgroundColor3 = CONFIG.Panel
-
-		end
-
-	end
-
-	Button.MouseButton1Click:Connect(function()
-
-		Enabled = not Enabled
-
-		Refresh()
-
-		callback(Enabled)
+		tween(button, {
+			BackgroundColor3 = CONFIG.HoverColor
+		})
 
 	end)
 
-	Refresh()
+	button.MouseLeave:Connect(function()
 
-	return {
+		tween(button, {
+			BackgroundColor3 = CONFIG.ButtonColor
+		})
 
-		Button = Button,
+	end)
 
-		Set = function(value)
+	button.MouseButton1Down:Connect(function()
 
-			Enabled = value
+		tween(button, {
+			BackgroundColor3 = CONFIG.PressedColor
+		})
 
-			Refresh()
+	end)
 
-			callback(Enabled)
+	button.MouseButton1Up:Connect(function()
 
-		end,
+		tween(button, {
+			BackgroundColor3 = CONFIG.HoverColor
+		})
 
-		Get = function()
-
-			return Enabled
-
-		end,
-
-	}
+	end)
 
 end
 
---========================================================--
--- CREATE BUTTONS
---========================================================--
+setupButton(Collapse)
+setupButton(Close)
 
-local WaterToggle = CreateToggle(
+--==================================================
+-- COLLAPSE SYSTEM
+--==================================================
 
-	"Walk On Water",
+local collapsed = false
 
-	"Walk across water surfaces",
+local OriginalSize =
+	Main.Size
 
-	false,
+Collapse.MouseButton1Click:Connect(function()
 
-	function(enabled)
+	collapsed = not collapsed
 
-		WalkOnWaterEnabled = enabled
+	if collapsed then
 
-		if enabled then
+		Content.Visible = false
 
-			CreateWaterPlatform()
+		tween(
+			Main,
+			{
+				Size = UDim2.fromOffset(
+					CONFIG.Width,
+					50
+				)
+			},
+			0.18
+		)
 
-		else
+		Collapse.Text = "+"
 
-			DestroyWaterPlatform()
+	else
 
-		end
+		tween(
+			Main,
+			{
+				Size = OriginalSize
+			},
+			0.18
+		)
 
-	end
+		task.delay(0.1, function()
 
-)
+			if not collapsed then
+				Content.Visible = true
+			end
 
-local CollisionToggle = CreateToggle(
+		end)
 
-	"No Collision",
-
-	"Pass through nearby objects",
-
-	false,
-
-	function(enabled)
-
-		NoCollisionEnabled = enabled
-
-		if not enabled then
-
-			RestoreCollision()
-		end
-
-	end
-
-)
-
-local FlyToggle = CreateToggle(
-
-	"Fly",
-
-	"Fly using WASD + Space / Shift",
-
-	false,
-
-	function(enabled)
-
-		FlyEnabled = enabled
-
-		if enabled then
-
-			StartFly()
-		else
-			StopFly()
-		end
+		Collapse.Text = "—"
 
 	end
 
+end)
+
+--==================================================
+-- CLOSE CONFIRMATION
+--==================================================
+
+local ConfirmOverlay = Instance.new("Frame")
+
+ConfirmOverlay.Name = "CloseConfirmation"
+
+ConfirmOverlay.Size = UDim2.fromScale(1, 1)
+
+ConfirmOverlay.BackgroundColor3 =
+	Color3.fromRGB(0, 0, 0)
+
+ConfirmOverlay.BackgroundTransparency = 0.35
+
+ConfirmOverlay.Visible = false
+
+ConfirmOverlay.ZIndex = 20
+ConfirmOverlay.Parent = ScreenGui
+
+-- Dialog
+local ConfirmBox = Instance.new("Frame")
+
+ConfirmBox.Size = UDim2.fromOffset(230, 108)
+ConfirmBox.AnchorPoint = Vector2.new(0.5, 0.5)
+ConfirmBox.Position = UDim2.fromScale(0.5, 0.5)
+
+ConfirmBox.BackgroundColor3 = CONFIG.PanelColor
+ConfirmBox.BackgroundTransparency = 0.02
+
+ConfirmBox.BorderSizePixel = 0
+ConfirmBox.ZIndex = 21
+ConfirmBox.Parent = ConfirmOverlay
+
+corner(ConfirmBox, 8)
+stroke(ConfirmBox, 0.82)
+
+local ConfirmTitle = createLabel(
+	ConfirmBox,
+	"ปิด BOWKAO SCRIPT?",
+	UDim2.new(1, -20, 0, 22),
+	UDim2.fromOffset(10, 9),
+	13
 )
 
---========================================================--
--- SPEED INFO
---========================================================--
+ConfirmTitle.Font = Enum.Font.GothamBold
+ConfirmTitle.ZIndex = 22
 
-local SpeedPanel = Create("Frame", {
+local ConfirmDescription = createLabel(
+	ConfirmBox,
+	"ต้องการปิดหน้าต่างนี้หรือไม่",
+	UDim2.new(1, -20, 0, 18),
+	UDim2.fromOffset(10, 31),
+	9
+)
 
-	Name = "SpeedInfo",
+ConfirmDescription.TextColor3 =
+	CONFIG.SecondaryTextColor
 
-	Size = UDim2.new(1, 0, 0, 40),
+ConfirmDescription.ZIndex = 22
 
-	BackgroundColor3 = CONFIG.PanelDark,
+-- Cancel
+local Cancel = Instance.new("TextButton")
 
-	BorderSizePixel = 0,
+Cancel.Size = UDim2.fromOffset(92, 27)
+Cancel.Position = UDim2.fromOffset(10, 70)
 
-}, Content)
+Cancel.BackgroundColor3 = CONFIG.ButtonColor
+Cancel.BackgroundTransparency = CONFIG.ButtonTransparency
 
-AddCorner(SpeedPanel, 10)
+Cancel.Text = "ยกเลิก"
+Cancel.TextColor3 = CONFIG.TextColor
+Cancel.TextSize = 10
+Cancel.Font = Enum.Font.GothamBold
 
-local SpeedText = Create("TextLabel", {
+Cancel.AutoButtonColor = false
+Cancel.BorderSizePixel = 0
+Cancel.ZIndex = 22
 
-	Size = UDim2.new(1, -20, 1, 0),
+Cancel.Parent = ConfirmBox
 
-	Position = UDim2.fromOffset(10, 0),
+corner(Cancel, 6)
 
-	BackgroundTransparency = 1,
+-- Confirm
+local Confirm = Instance.new("TextButton")
 
-	Text = "Fly Speed: 16",
+Confirm.Size = UDim2.fromOffset(92, 27)
+Confirm.Position = UDim2.fromOffset(128, 70)
 
-	TextColor3 = CONFIG.SubText,
+Confirm.BackgroundColor3 = CONFIG.ButtonColor
+Confirm.BackgroundTransparency = CONFIG.ButtonTransparency
 
-	TextSize = 11,
+Confirm.Text = "ยืนยัน"
+Confirm.TextColor3 = CONFIG.TextColor
+Confirm.TextSize = 10
+Confirm.Font = Enum.Font.GothamBold
 
-	Font = Enum.Font.Gotham,
+Confirm.AutoButtonColor = false
+Confirm.BorderSizePixel = 0
+Confirm.ZIndex = 22
 
-	TextXAlignment = Enum.TextXAlignment.Left,
+Confirm.Parent = ConfirmBox
 
-}, SpeedPanel)
+corner(Confirm, 6)
 
---========================================================--
--- DRAG WINDOW
---========================================================--
+setupButton(Cancel)
+setupButton(Confirm)
 
-local Dragging = false
-local DragStart
-local StartPosition
+Close.MouseButton1Click:Connect(function()
+
+	ConfirmOverlay.Visible = true
+
+end)
+
+Cancel.MouseButton1Click:Connect(function()
+
+	ConfirmOverlay.Visible = false
+
+end)
+
+Confirm.MouseButton1Click:Connect(function()
+
+	ScreenGui:Destroy()
+
+end)
+
+--==================================================
+-- DRAG SYSTEM
+--==================================================
+
+local dragging = false
+local dragStart
+local startPosition
+
+local function updateDrag(input)
+
+	local delta = input.Position - dragStart
+
+	Main.Position = UDim2.new(
+		startPosition.X.Scale,
+		startPosition.X.Offset + delta.X,
+		startPosition.Y.Scale,
+		startPosition.Y.Offset + delta.Y
+	)
+
+end
 
 Header.InputBegan:Connect(function(input)
 
 	if input.UserInputType == Enum.UserInputType.MouseButton1
 		or input.UserInputType == Enum.UserInputType.Touch then
 
-		Dragging = true
+		dragging = true
 
-		DragStart = input.Position
+		dragStart = input.Position
+		startPosition = Main.Position
 
-		StartPosition = Main.Position
+		input.Changed:Connect(function()
 
-	end
+			if input.UserInputState ==
+				Enum.UserInputState.End then
 
-end)
+				dragging = false
 
-Header.InputEnded:Connect(function(input)
+			end
 
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-
-		Dragging = false
+		end)
 
 	end
 
@@ -1028,108 +861,52 @@ end)
 
 UserInputService.InputChanged:Connect(function(input)
 
-	if not Dragging then
+	if dragging and (
+		input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch
+	) then
+
+		updateDrag(input)
+
+	end
+
+end)
+
+--==================================================
+-- RESPONSIVE SCALE
+--==================================================
+
+local Camera = workspace.CurrentCamera
+
+local function updateScale()
+
+	if not Camera then
 		return
 	end
 
-	if input.UserInputType ~= Enum.UserInputType.MouseMovement
-		and input.UserInputType ~= Enum.UserInputType.Touch then
-		return
-	end
+	local viewport = Camera.ViewportSize
 
-	local Delta = input.Position - DragStart
+	if viewport.X <= 500 then
 
-	Main.Position = UDim2.new(
+		UIScale.Scale = 0.88
 
-		StartPosition.X.Scale,
+	elseif viewport.X <= 800 then
 
-		StartPosition.X.Offset + Delta.X,
+		UIScale.Scale = 0.94
 
-		StartPosition.Y.Scale,
+	else
 
-		StartPosition.Y.Offset + Delta.Y
-
-	)
-
-end)
-
---========================================================--
--- MAIN UPDATE LOOP
---========================================================--
-
-local CollisionTimer = 0
-
-RunService.Heartbeat:Connect(function(deltaTime)
-
-	-- Water
-	if WalkOnWaterEnabled
-		and RootPart
-		and WaterPlatform then
-
-		if IsWaterBelow() then
-
-			WaterPlatform.CFrame =
-				CFrame.new(
-					RootPart.Position.X,
-					RootPart.Position.Y + CONFIG.WaterPlatformOffset,
-					RootPart.Position.Z
-				)
-
-		else
-
-			WaterPlatform.CFrame =
-				CFrame.new(
-					RootPart.Position.X,
-					-1000,
-					RootPart.Position.Z
-				)
-
-		end
+		UIScale.Scale = 1
 
 	end
 
-	-- No Collision
-	if NoCollisionEnabled then
+end
 
-		CollisionTimer += deltaTime
+if Camera then
 
-		if CollisionTimer >= 0.15 then
+	Camera:GetPropertyChangedSignal("ViewportSize")
+		:Connect(updateScale)
 
-			CollisionTimer = 0
+	updateScale()
 
-			UpdateNoCollision()
-
-		end
-
-	end
-
-	-- Speed display
-	if Humanoid then
-
-		SpeedText.Text =
-			"Fly Speed: "
-			.. tostring(math.floor(GetMapSpeed()))
-
-	end
-
-end)
-
---========================================================--
--- CLEANUP ON RESPAWN
---========================================================--
-
-Player.CharacterRemoving:Connect(function()
-
-	DestroyWaterPlatform()
-
-	StopFly()
-
-	RestoreCollision()
-
-end)
-
---========================================================--
--- FINISHED
---========================================================--
-
-print("[Movement Control] Loaded successfully.")
+end
