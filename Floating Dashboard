@@ -1,560 +1,1232 @@
+--//==============================================================
 --// BOWKAO SCRIPT PREMIUM
 --// Compact Network Dashboard
---// Real-time Information HUD
---// UI Prototype / Information System
+--// Refined Professional UI Edition
+--// Roblox LocalScript
+--//==============================================================
+
+--==============================================================
+-- SERVICES
+--==============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Stats = game:GetService("Stats")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+
+--==============================================================
+-- PLAYER
+--==============================================================
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
---==================================================
+--==============================================================
 -- CONFIG
---==================================================
+--==============================================================
 
 local CONFIG = {
 
+	--==========================================================
+	-- GENERAL
+	--==========================================================
+
 	GuiName = "BowkaoNetworkDashboard",
-	-- Exact color system
+
+	--==========================================================
+	-- MAIN SIZE
+	--==========================================================
+
+	Width = 270,
+	Height = 158,
+
+	Position = UDim2.fromOffset(14, 14),
+
+	--==========================================================
+	-- COLORS
+	--==========================================================
+
 	MainColor = Color3.fromRGB(35, 37, 39),
 	PanelColor = Color3.fromRGB(46, 48, 51),
 	DarkPanelColor = Color3.fromRGB(25, 27, 29),
+
 	ButtonColor = Color3.fromRGB(55, 57, 60),
 	HoverColor = Color3.fromRGB(70, 72, 75),
 	PressedColor = Color3.fromRGB(85, 87, 90),
-	DividerColor = Color3.fromRGB(255, 255, 255),
+
 	TextColor = Color3.fromRGB(255, 255, 255),
 	SecondaryTextColor = Color3.fromRGB(180, 180, 180),
+
+	DividerColor = Color3.fromRGB(255, 255, 255),
+
+	GoodColor = Color3.fromRGB(100, 255, 130),
+	WarningColor = Color3.fromRGB(255, 220, 80),
+	HighColor = Color3.fromRGB(255, 155, 70),
+	BadColor = Color3.fromRGB(255, 80, 80),
+	NeutralColor = Color3.fromRGB(180, 180, 180),
+
+	--==========================================================
+	-- TRANSPARENCY
+	--==========================================================
+
 	MainTransparency = 0.10,
 	PanelTransparency = 0.08,
 	DarkPanelTransparency = 0.08,
+
 	ButtonTransparency = 0.05,
+
 	DividerTransparency = 0.88,
-	CornerRadius = 8,
-	-- Compact size
-	Width = 270,
-	Height = 158,
-	-- Position
-	Position = UDim2.new(0, 14, 0, 14),
-	-- Update
+
+	--==========================================================
+	-- ROUNDING
+	--==========================================================
+
+	MainCornerRadius = 8,
+	PanelCornerRadius = 7,
+	ButtonCornerRadius = 6,
+
+	--==========================================================
+	-- UPDATE
+	--==========================================================
+
 	UpdateRate = 0.25,
+
+	--==========================================================
+	-- ANIMATION
+	--==========================================================
+
+	HoverTweenTime = 0.10,
+	PressTweenTime = 0.07,
+	CollapseTweenTime = 0.18,
+
+	--==========================================================
+	-- Z INDEX
+	--==========================================================
+
+	MainZIndex = 10,
+	HeaderZIndex = 20,
+	ContentZIndex = 20,
+	OverlayZIndex = 100,
+
 }
 
---==================================================
--- CLEAN OLD GUI
---==================================================
+--==============================================================
+-- REMOVE OLD GUI
+--==============================================================
 
-local old = PlayerGui:FindFirstChild(CONFIG.GuiName)
+local OldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
 
-if old then
-	old:Destroy()
+if OldGui then
+	OldGui:Destroy()
 end
 
---==================================================
--- HELPERS
---==================================================
+--==============================================================
+-- HELPER: CORNER
+--==============================================================
 
-local function corner(parent, radius)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, radius or CONFIG.CornerRadius)
-	c.Parent = parent
-	return c
+local function addCorner(parent, radius)
+
+	local Corner = Instance.new("UICorner")
+
+	Corner.Name = "Corner"
+	Corner.CornerRadius = UDim.new(0, radius)
+
+	Corner.Parent = parent
+
+	return Corner
+
 end
 
-local function stroke(parent, transparency)
-	local s = Instance.new("UIStroke")
-	s.Color = CONFIG.DividerColor
-	s.Transparency = transparency or CONFIG.DividerTransparency
-	s.Thickness = 1
-	s.Parent = parent
-	return s
+--==============================================================
+-- HELPER: STROKE
+--==============================================================
+
+local function addStroke(parent, transparency, thickness)
+
+	local Stroke = Instance.new("UIStroke")
+
+	Stroke.Name = "Border"
+
+	Stroke.Color = CONFIG.DividerColor
+	Stroke.Transparency = transparency or CONFIG.DividerTransparency
+	Stroke.Thickness = thickness or 1
+
+	Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+	Stroke.Parent = parent
+
+	return Stroke
+
 end
+
+--==============================================================
+-- HELPER: TWEEN
+--==============================================================
 
 local function tween(object, properties, duration)
-	TweenService:Create(
+
+	local Tween = TweenService:Create(
+
 		object,
+
 		TweenInfo.new(
 			duration or 0.12,
 			Enum.EasingStyle.Quart,
 			Enum.EasingDirection.Out
 		),
+
 		properties
-	):Play()
+
+	)
+
+	Tween:Play()
+
+	return Tween
+
 end
 
-local function createLabel(parent, text, size, position, fontSize)
-	local label = Instance.new("TextLabel")
-	label.BackgroundTransparency = 1
-	label.Text = text
-	label.TextColor3 = CONFIG.TextColor
-	label.TextSize = fontSize or 12
-	label.Font = Enum.Font.Gotham
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Center
-	label.Size = size
-	label.Position = position
-	label.Parent = parent
-	return label
+--==============================================================
+-- HELPER: LABEL
+--==============================================================
+
+local function createLabel(
+	parent,
+	text,
+	size,
+	position,
+	fontSize,
+	font,
+	color
+)
+
+	local Label = Instance.new("TextLabel")
+
+	Label.BackgroundTransparency = 1
+	Label.BorderSizePixel = 0
+
+	Label.Text = text
+
+	Label.TextColor3 = color or CONFIG.TextColor
+
+	Label.TextSize = fontSize or 12
+
+	Label.Font = font or Enum.Font.Gotham
+
+	Label.TextXAlignment = Enum.TextXAlignment.Left
+	Label.TextYAlignment = Enum.TextYAlignment.Center
+
+	Label.TextTruncate = Enum.TextTruncate.AtEnd
+
+	Label.Size = size
+	Label.Position = position
+
+	Label.Parent = parent
+
+	return Label
+
 end
 
---==================================================
--- GUI
---==================================================
+--==============================================================
+-- SCREEN GUI
+--==============================================================
 
 local ScreenGui = Instance.new("ScreenGui")
+
 ScreenGui.Name = CONFIG.GuiName
+
 ScreenGui.ResetOnSpawn = false
+
 ScreenGui.IgnoreGuiInset = true
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+
+ScreenGui.DisplayOrder = 999999
+
 ScreenGui.Parent = PlayerGui
 
---==================================================
--- SCALE
---==================================================
+--==============================================================
+-- RESPONSIVE SCALE
+--==============================================================
 
 local UIScale = Instance.new("UIScale")
+
+UIScale.Name = "ResponsiveScale"
+
 UIScale.Scale = 1
+
 UIScale.Parent = ScreenGui
 
---==================================================
+--==============================================================
 -- MAIN
---==================================================
+--==============================================================
 
 local Main = Instance.new("Frame")
 
 Main.Name = "Main"
-Main.Size = UDim2.fromOffset(CONFIG.Width, CONFIG.Height)
+
+Main.Size = UDim2.fromOffset(
+	CONFIG.Width,
+	CONFIG.Height
+)
+
 Main.Position = CONFIG.Position
 
 Main.BackgroundColor3 = CONFIG.MainColor
 Main.BackgroundTransparency = CONFIG.MainTransparency
 
 Main.BorderSizePixel = 0
+
+Main.ZIndex = CONFIG.MainZIndex
+
 Main.Parent = ScreenGui
 
-corner(Main, CONFIG.CornerRadius)
-stroke(Main)
+addCorner(
+	Main,
+	CONFIG.MainCornerRadius
+)
 
---==================================================
+addStroke(
+	Main,
+	CONFIG.DividerTransparency,
+	1
+)
+
+--==============================================================
 -- HEADER
---==================================================
+--==============================================================
 
 local Header = Instance.new("Frame")
 
 Header.Name = "Header"
-Header.Size = UDim2.new(1, -12, 0, 38)
-Header.Position = UDim2.fromOffset(6, 6)
+
+Header.Size = UDim2.new(
+	1,
+	-12,
+	0,
+	36
+)
+
+Header.Position = UDim2.fromOffset(
+	6,
+	6
+)
 
 Header.BackgroundColor3 = CONFIG.DarkPanelColor
 Header.BackgroundTransparency = CONFIG.DarkPanelTransparency
 
 Header.BorderSizePixel = 0
+
+Header.ZIndex = CONFIG.HeaderZIndex
+
 Header.Parent = Main
 
-corner(Header, 7)
-
--- Title
-local Title = createLabel(
+addCorner(
 	Header,
-	"BOWKAO SCRIPT",
-	UDim2.new(1, -78, 0, 17),
-	UDim2.fromOffset(10, 3),
-	11
+	CONFIG.PanelCornerRadius
 )
 
-Title.Font = Enum.Font.GothamBold
+--==============================================================
+-- DRAG AREA
+--==============================================================
+-- แยกพื้นที่ลากออกจากปุ่ม
+-- ป้องกันการลากชนกับ Collapse / Close
+
+local DragArea = Instance.new("Frame")
+
+DragArea.Name = "DragArea"
+
+DragArea.Size = UDim2.new(
+	1,
+	-68,
+	1,
+	0
+)
+
+DragArea.Position = UDim2.fromOffset(
+	0,
+	0
+)
+
+DragArea.BackgroundTransparency = 1
+
+DragArea.BorderSizePixel = 0
+
+DragArea.ZIndex = CONFIG.HeaderZIndex + 1
+
+DragArea.Parent = Header
+
+--==============================================================
+-- TITLE
+--==============================================================
+
+local Title = createLabel(
+
+	DragArea,
+
+	"BOWKAO SCRIPT",
+
+	UDim2.new(
+		1,
+		-12,
+		0,
+		17
+	),
+
+	UDim2.fromOffset(
+		10,
+		3
+	),
+
+	11,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.TextColor
+
+)
+
+Title.ZIndex = CONFIG.HeaderZIndex + 2
+
+--==============================================================
+-- SUBTITLE
+--==============================================================
 
 local Subtitle = createLabel(
-	Header,
+
+	DragArea,
+
 	"PREMIUM  •  NETWORK",
-	UDim2.new(1, -78, 0, 14),
-	UDim2.fromOffset(10, 20),
-	8
+
+	UDim2.new(
+		1,
+		-12,
+		0,
+		12
+	),
+
+	UDim2.fromOffset(
+		10,
+		20
+	),
+
+	8,
+
+	Enum.Font.Gotham,
+
+	CONFIG.SecondaryTextColor
+
 )
 
-Subtitle.TextColor3 = CONFIG.SecondaryTextColor
-Subtitle.TextTransparency = 0.10
+Subtitle.TextTransparency = 0.08
 
---==================================================
+Subtitle.ZIndex = CONFIG.HeaderZIndex + 2
+
+--==============================================================
+-- BUTTON CREATOR
+--==============================================================
+
+local function createHeaderButton(
+	name,
+	text,
+	position
+)
+
+	local Button = Instance.new("TextButton")
+
+	Button.Name = name
+
+	Button.Size = UDim2.fromOffset(
+		26,
+		26
+	)
+
+	Button.Position = position
+
+	Button.BackgroundColor3 = CONFIG.ButtonColor
+	Button.BackgroundTransparency = CONFIG.ButtonTransparency
+
+	Button.BorderSizePixel = 0
+
+	Button.AutoButtonColor = false
+
+	Button.Text = text
+
+	Button.TextColor3 = CONFIG.TextColor
+
+	Button.TextSize = name == "Close" and 16 or 14
+
+	Button.Font = Enum.Font.GothamBold
+
+	Button.ZIndex = CONFIG.HeaderZIndex + 5
+
+	Button.Parent = Header
+
+	addCorner(
+		Button,
+		CONFIG.ButtonCornerRadius
+	)
+
+	return Button
+
+end
+
+--==============================================================
 -- COLLAPSE BUTTON
---==================================================
+--==============================================================
 
-local Collapse = Instance.new("TextButton")
+local Collapse = createHeaderButton(
 
-Collapse.Name = "Collapse"
-Collapse.Size = UDim2.fromOffset(26, 26)
-Collapse.Position = UDim2.new(1, -60, 0, 6)
+	"Collapse",
 
-Collapse.BackgroundColor3 = CONFIG.ButtonColor
-Collapse.BackgroundTransparency = CONFIG.ButtonTransparency
+	"—",
 
-Collapse.Text = "—"
-Collapse.TextColor3 = CONFIG.TextColor
-Collapse.TextSize = 14
-Collapse.Font = Enum.Font.GothamBold
+	UDim2.new(
+		1,
+		-60,
+		0,
+		5
+	)
 
-Collapse.AutoButtonColor = false
-Collapse.BorderSizePixel = 0
+)
 
-Collapse.Parent = Header
-
-corner(Collapse, 6)
-
---==================================================
+--==============================================================
 -- CLOSE BUTTON
---==================================================
+--==============================================================
 
-local Close = Instance.new("TextButton")
+local Close = createHeaderButton(
 
-Close.Name = "Close"
-Close.Size = UDim2.fromOffset(26, 26)
-Close.Position = UDim2.new(1, -31, 0, 6)
+	"Close",
 
-Close.BackgroundColor3 = CONFIG.ButtonColor
-Close.BackgroundTransparency = CONFIG.ButtonTransparency
+	"×",
 
-Close.Text = "×"
-Close.TextColor3 = CONFIG.TextColor
-Close.TextSize = 16
-Close.Font = Enum.Font.GothamBold
+	UDim2.new(
+		1,
+		-31,
+		0,
+		5
+	)
 
-Close.AutoButtonColor = false
-Close.BorderSizePixel = 0
+)
 
-Close.Parent = Header
-
-corner(Close, 6)
-
---==================================================
+--==============================================================
 -- CONTENT
---==================================================
+--==============================================================
 
 local Content = Instance.new("Frame")
 
 Content.Name = "Content"
-Content.Size = UDim2.new(1, -12, 1, -50)
-Content.Position = UDim2.fromOffset(6, 44)
+
+Content.Size = UDim2.new(
+	1,
+	-12,
+	1,
+	-48
+)
+
+Content.Position = UDim2.fromOffset(
+	6,
+	42
+)
 
 Content.BackgroundTransparency = 1
+
+Content.BorderSizePixel = 0
+
+Content.ZIndex = CONFIG.ContentZIndex
+
 Content.Parent = Main
 
---==================================================
--- INFORMATION CARDS
---==================================================
+--==============================================================
+-- CARD CREATOR
+--==============================================================
 
-local function createCard(name, x, y, width, height)
+local function createCard(
+	name,
+	position,
+	size
+)
 
 	local Card = Instance.new("Frame")
+
 	Card.Name = name
-	Card.Size = UDim2.fromOffset(width, height)
-	Card.Position = UDim2.fromOffset(x, y)
+
+	Card.Position = position
+	Card.Size = size
+
 	Card.BackgroundColor3 = CONFIG.PanelColor
 	Card.BackgroundTransparency = CONFIG.PanelTransparency
+
 	Card.BorderSizePixel = 0
+
+	Card.ZIndex = CONFIG.ContentZIndex
+
 	Card.Parent = Content
-	corner(Card, 7)
+
+	addCorner(
+		Card,
+		CONFIG.PanelCornerRadius
+	)
+
 	return Card
+
 end
 
--- Ping
+--==============================================================
+-- CARD LAYOUT
+--==============================================================
+
+local CARD_WIDTH = 126
+local CARD_HEIGHT = 47
+
+local CARD_GAP = 6
+
+--==============================================================
+-- PING CARD
+--==============================================================
+
 local PingCard = createCard(
+
 	"Ping",
-	0,
-	0,
-	126,
-	49
+
+	UDim2.fromOffset(
+		0,
+		0
+	),
+
+	UDim2.fromOffset(
+		CARD_WIDTH,
+		CARD_HEIGHT
+	)
+
 )
 
 local PingTitle = createLabel(
-	PingCard,
-	"PING",
-	UDim2.new(1, -16, 0, 15),
-	UDim2.fromOffset(8, 4),
-	8
-)
 
-PingTitle.TextColor3 = CONFIG.SecondaryTextColor
+	PingCard,
+
+	"PING",
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		13
+	),
+
+	UDim2.fromOffset(
+		8,
+		4
+	),
+
+	8,
+
+	Enum.Font.GothamMedium,
+
+	CONFIG.SecondaryTextColor
+
+)
 
 local PingValue = createLabel(
+
 	PingCard,
+
 	"-- ms",
-	UDim2.new(1, -16, 0, 24),
-	UDim2.fromOffset(8, 18),
-	16
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		22
+	),
+
+	UDim2.fromOffset(
+		8,
+		18
+	),
+
+	15,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.TextColor
+
 )
 
-PingValue.Font = Enum.Font.GothamBold
+--==============================================================
+-- FPS CARD
+--==============================================================
 
--- FPS
 local FPSCard = createCard(
+
 	"FPS",
-	132,
-	0,
-	126,
-	49
+
+	UDim2.fromOffset(
+		CARD_WIDTH + CARD_GAP,
+		0
+	),
+
+	UDim2.fromOffset(
+		CARD_WIDTH,
+		CARD_HEIGHT
+	)
+
 )
 
 local FPSTitle = createLabel(
-	FPSCard,
-	"FPS",
-	UDim2.new(1, -16, 0, 15),
-	UDim2.fromOffset(8, 4),
-	8
-)
 
-FPSTitle.TextColor3 = CONFIG.SecondaryTextColor
+	FPSCard,
+
+	"FPS",
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		13
+	),
+
+	UDim2.fromOffset(
+		8,
+		4
+	),
+
+	8,
+
+	Enum.Font.GothamMedium,
+
+	CONFIG.SecondaryTextColor
+
+)
 
 local FPSValue = createLabel(
+
 	FPSCard,
+
 	"--",
-	UDim2.new(1, -16, 0, 24),
-	UDim2.fromOffset(8, 18),
-	16
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		22
+	),
+
+	UDim2.fromOffset(
+		8,
+		18
+	),
+
+	15,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.TextColor
+
 )
 
-FPSValue.Font = Enum.Font.GothamBold
+--==============================================================
+-- CONNECTION CARD
+--==============================================================
 
--- Connection
 local ConnectionCard = createCard(
+
 	"Connection",
-	0,
-	55,
-	126,
-	49
+
+	UDim2.fromOffset(
+		0,
+		CARD_HEIGHT + CARD_GAP
+	),
+
+	UDim2.fromOffset(
+		CARD_WIDTH,
+		CARD_HEIGHT
+	)
+
 )
 
 local ConnectionTitle = createLabel(
-	ConnectionCard,
-	"CONNECTION",
-	UDim2.new(1, -16, 0, 15),
-	UDim2.fromOffset(8, 4),
-	8
-)
 
-ConnectionTitle.TextColor3 = CONFIG.SecondaryTextColor
+	ConnectionCard,
+
+	"CONNECTION",
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		13
+	),
+
+	UDim2.fromOffset(
+		8,
+		4
+	),
+
+	8,
+
+	Enum.Font.GothamMedium,
+
+	CONFIG.SecondaryTextColor
+
+)
 
 local ConnectionValue = createLabel(
+
 	ConnectionCard,
-	"CONNECTED",
-	UDim2.new(1, -16, 0, 24),
-	UDim2.fromOffset(8, 18),
-	11
+
+	"CONNECTING",
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		22
+	),
+
+	UDim2.fromOffset(
+		8,
+		18
+	),
+
+	10,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.WarningColor
+
 )
 
-ConnectionValue.Font = Enum.Font.GothamBold
+--==============================================================
+-- PLAYERS CARD
+--==============================================================
 
--- Players
 local PlayersCard = createCard(
+
 	"Players",
-	132,
-	55,
-	126,
-	49
+
+	UDim2.fromOffset(
+		CARD_WIDTH + CARD_GAP,
+		CARD_HEIGHT + CARD_GAP
+	),
+
+	UDim2.fromOffset(
+		CARD_WIDTH,
+		CARD_HEIGHT
+	)
+
 )
 
 local PlayersTitle = createLabel(
-	PlayersCard,
-	"PLAYERS",
-	UDim2.new(1, -16, 0, 15),
-	UDim2.fromOffset(8, 4),
-	8
-)
 
-PlayersTitle.TextColor3 = CONFIG.SecondaryTextColor
+	PlayersCard,
+
+	"PLAYERS",
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		13
+	),
+
+	UDim2.fromOffset(
+		8,
+		4
+	),
+
+	8,
+
+	Enum.Font.GothamMedium,
+
+	CONFIG.SecondaryTextColor
+
+)
 
 local PlayersValue = createLabel(
+
 	PlayersCard,
+
 	"0 / 0",
-	UDim2.new(1, -16, 0, 24),
-	UDim2.fromOffset(8, 18),
-	13
+
+	UDim2.new(
+		1,
+		-16,
+		0,
+		22
+	),
+
+	UDim2.fromOffset(
+		8,
+		18
+	),
+
+	13,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.TextColor
+
 )
 
-PlayersValue.Font = Enum.Font.GothamBold
-
---==================================================
+--==============================================================
 -- STATUS BAR
---==================================================
+--==============================================================
 
 local Status = Instance.new("Frame")
 
 Status.Name = "Status"
 
-Status.Size = UDim2.new(1, 0, 0, 18)
-Status.Position = UDim2.fromOffset(0, 111)
+Status.Size = UDim2.new(
+	1,
+	0,
+	0,
+	17
+)
+
+Status.Position = UDim2.fromOffset(
+	0,
+	104
+)
 
 Status.BackgroundTransparency = 1
+
+Status.BorderSizePixel = 0
+
+Status.ZIndex = CONFIG.ContentZIndex
+
 Status.Parent = Content
+
+--==============================================================
+-- STATUS DOT
+--==============================================================
 
 local StatusDot = Instance.new("Frame")
 
-StatusDot.Size = UDim2.fromOffset(6, 6)
-StatusDot.Position = UDim2.fromOffset(2, 6)
+StatusDot.Name = "StatusDot"
 
-StatusDot.BackgroundColor3 = Color3.fromRGB(100, 255, 130)
-StatusDot.BorderSizePixel = 0
-StatusDot.Parent = Status
-
-corner(StatusDot, 6)
-
-local StatusText = createLabel(
-	Status,
-	"SERVER CONNECTED",
-	UDim2.new(1, -14, 1, 0),
-	UDim2.fromOffset(12, 0),
-	8
+StatusDot.Size = UDim2.fromOffset(
+	6,
+	6
 )
 
-StatusText.TextColor3 = CONFIG.SecondaryTextColor
+StatusDot.Position = UDim2.fromOffset(
+	2,
+	5
+)
 
---==================================================
--- PING COLOR SYSTEM
---==================================================
+StatusDot.BackgroundColor3 = CONFIG.NeutralColor
 
-local function getPingColor(ping)
+StatusDot.BorderSizePixel = 0
+
+StatusDot.ZIndex = CONFIG.ContentZIndex + 1
+
+StatusDot.Parent = Status
+
+addCorner(
+	StatusDot,
+	6
+)
+
+--==============================================================
+-- STATUS TEXT
+--==============================================================
+
+local StatusText = createLabel(
+
+	Status,
+
+	"CONNECTING...",
+
+	UDim2.new(
+		1,
+		-14,
+		1,
+		0
+	),
+
+	UDim2.fromOffset(
+		12,
+		0
+	),
+
+	8,
+
+	Enum.Font.GothamMedium,
+
+	CONFIG.SecondaryTextColor
+
+)
+
+StatusText.ZIndex = CONFIG.ContentZIndex + 1
+
+--==============================================================
+-- PING STATUS
+--==============================================================
+
+local function getPingStatus(ping)
 
 	if ping <= 50 then
-		return Color3.fromRGB(100, 255, 130), "EXCELLENT"
+
+		return CONFIG.GoodColor, "EXCELLENT"
+
 	elseif ping <= 100 then
-		return Color3.fromRGB(255, 220, 80), "GOOD"
+
+		return CONFIG.WarningColor, "GOOD"
+
 	elseif ping <= 200 then
-		return Color3.fromRGB(255, 155, 70), "HIGH"
+
+		return CONFIG.HighColor, "HIGH"
+
 	else
-		return Color3.fromRGB(255, 80, 80), "VERY HIGH"
+
+		return CONFIG.BadColor, "VERY HIGH"
+
 	end
 
 end
 
---==================================================
+--==============================================================
 -- GET PING
---==================================================
+--==============================================================
 
 local function getPing()
 
 	local success, result = pcall(function()
-		local network = Stats.Network
-		local serverStats = network.ServerStatsItem
-		local pingItem =
-			serverStats:FindFirstChild("Data Ping")
-		if pingItem then
-			local value = pingItem:GetValue()
-			if typeof(value) == "number" then
-				return math.floor(value)
-			end
+
+		local pingSeconds = Player:GetNetworkPing()
+
+		if typeof(pingSeconds) ~= "number" then
+			return nil
 		end
-		return nil
+
+		return math.floor(
+			(pingSeconds * 1000) + 0.5
+		)
+
 	end)
+
 	if success then
 		return result
 	end
+
 	return nil
+
 end
 
---==================================================
--- FPS
---==================================================
+--==============================================================
+-- FPS SYSTEM
+--==============================================================
 
-local fps = 60
-local frameCounter = 0
-local fpsTimer = 0
+local FPS = 60
+
+local FrameCounter = 0
+local FPSTimer = 0
 
 RunService.RenderStepped:Connect(function(deltaTime)
 
-	frameCounter += 1
-	fpsTimer += deltaTime
-	if fpsTimer >= 0.5 then
-		fps = math.floor(
-			frameCounter / fpsTimer + 0.5
+	FrameCounter += 1
+
+	FPSTimer += deltaTime
+
+	if FPSTimer >= 0.5 then
+
+		FPS = math.floor(
+			(FrameCounter / FPSTimer) + 0.5
 		)
-		frameCounter = 0
-		fpsTimer = 0
+
+		FrameCounter = 0
+
+		FPSTimer = 0
+
 	end
 
 end)
 
---==================================================
+--==============================================================
+-- FPS COLOR
+--==============================================================
+
+local function getFPSColor(fps)
+
+	if fps >= 55 then
+
+		return CONFIG.GoodColor
+
+	elseif fps >= 30 then
+
+		return CONFIG.WarningColor
+
+	else
+
+		return CONFIG.BadColor
+
+	end
+
+end
+
+--==============================================================
 -- REAL-TIME UPDATE
---==================================================
+--==============================================================
 
 task.spawn(function()
 
 	while ScreenGui.Parent do
-		-- Ping
-		local ping = getPing()
-		if ping then
-			local color, status = getPingColor(ping)
-			PingValue.Text = tostring(ping) .. " ms"
-			PingValue.TextColor3 = color
-			StatusDot.BackgroundColor3 = color
-		else
-			PingValue.Text = "-- ms"
-			PingValue.TextColor3 = CONFIG.TextColor
+
+		--======================================================
+		-- PING
+		--======================================================
+
+		local Ping = getPing()
+
+		if Ping then
+
+			local PingColor, PingStatus =
+				getPingStatus(Ping)
+
+			PingValue.Text =
+				tostring(Ping) .. " ms"
+
+			PingValue.TextColor3 =
+				PingColor
+
 			StatusDot.BackgroundColor3 =
-				Color3.fromRGB(180, 180, 180)
+				PingColor
+
+			StatusText.Text =
+				"CONNECTED  •  " ..
+				tostring(Ping) ..
+				" ms  •  " ..
+				PingStatus
+
+			StatusText.TextColor3 =
+				PingColor
+
+			ConnectionValue.Text =
+				"CONNECTED"
+
+			ConnectionValue.TextColor3 =
+				CONFIG.GoodColor
+
+		else
+
+			PingValue.Text =
+				"-- ms"
+
+			PingValue.TextColor3 =
+				CONFIG.NeutralColor
+
+			StatusDot.BackgroundColor3 =
+				CONFIG.NeutralColor
+
+			StatusText.Text =
+				"CONNECTING..."
+
+			StatusText.TextColor3 =
+				CONFIG.SecondaryTextColor
+
+			ConnectionValue.Text =
+				"CONNECTING"
+
+			ConnectionValue.TextColor3 =
+				CONFIG.WarningColor
+
 		end
+
+		--======================================================
 		-- FPS
-		FPSValue.Text = tostring(fps)
-		if fps >= 55 then
-			FPSValue.TextColor3 =
-				Color3.fromRGB(100, 255, 130)
-		elseif fps >= 30 then
-			FPSValue.TextColor3 =
-				Color3.fromRGB(255, 220, 80)
-		else
-			FPSValue.TextColor3 =
-				Color3.fromRGB(255, 80, 80)
+		--======================================================
+
+		FPSValue.Text =
+			tostring(FPS)
+
+		FPSValue.TextColor3 =
+			getFPSColor(FPS)
+
+		--======================================================
+		-- PLAYERS
+		--======================================================
+
+		local CurrentPlayers =
+			#Players:GetPlayers()
+
+		local MaxPlayers =
+			Players.MaxPlayers
+
+		if MaxPlayers <= 0 then
+			MaxPlayers = CurrentPlayers
 		end
-		-- Players
-		local playerCount = #Players:GetPlayers()
+
 		PlayersValue.Text =
-			tostring(playerCount) .. " / " ..
-			tostring(Players.MaxPlayers)
-		-- Server
-		if game:IsLoaded() then
-			ConnectionValue.Text = "CONNECTED"
-			ConnectionValue.TextColor3 =
-				Color3.fromRGB(100, 255, 130)
-			StatusText.Text = "SERVER CONNECTED"
-		else
-			ConnectionValue.Text = "CONNECTING"
-			ConnectionValue.TextColor3 =
-				Color3.fromRGB(255, 220, 80)
-			StatusText.Text = "CONNECTING..."
-		end
+			tostring(CurrentPlayers) ..
+			" / " ..
+			tostring(MaxPlayers)
+
+		--======================================================
+		-- WAIT
+		--======================================================
+
 		task.wait(CONFIG.UpdateRate)
+
 	end
 
 end)
 
---==================================================
--- BUTTON HOVER
---==================================================
+--==============================================================
+-- BUTTON EFFECT
+--==============================================================
 
-local function setupButton(button)
+local function setupButton(Button)
 
-	button.MouseEnter:Connect(function()
-		tween(button, {
-			BackgroundColor3 = CONFIG.HoverColor
-		})
+	Button.MouseEnter:Connect(function()
+
+		tween(
+			Button,
+			{
+				BackgroundColor3 =
+					CONFIG.HoverColor
+			},
+			CONFIG.HoverTweenTime
+		)
+
 	end)
-	button.MouseLeave:Connect(function()
-		tween(button, {
-			BackgroundColor3 = CONFIG.ButtonColor
-		})
+
+	Button.MouseLeave:Connect(function()
+
+		tween(
+			Button,
+			{
+				BackgroundColor3 =
+					CONFIG.ButtonColor
+			},
+			CONFIG.HoverTweenTime
+		)
+
 	end)
-	button.MouseButton1Down:Connect(function()
-		tween(button, {
-			BackgroundColor3 = CONFIG.PressedColor
-		})
+
+	Button.MouseButton1Down:Connect(function()
+
+		tween(
+			Button,
+			{
+				BackgroundColor3 =
+					CONFIG.PressedColor
+			},
+			CONFIG.PressTweenTime
+		)
+
 	end)
-	button.MouseButton1Up:Connect(function()
-		tween(button, {
-			BackgroundColor3 = CONFIG.HoverColor
-		})
+
+	Button.MouseButton1Up:Connect(function()
+
+		tween(
+			Button,
+			{
+				BackgroundColor3 =
+					CONFIG.HoverColor
+			},
+			CONFIG.HoverTweenTime
+		)
+
 	end)
 
 end
@@ -562,156 +1234,303 @@ end
 setupButton(Collapse)
 setupButton(Close)
 
---==================================================
+--==============================================================
 -- COLLAPSE SYSTEM
---==================================================
+--==============================================================
 
-local collapsed = false
+local Collapsed = false
 
-local OriginalSize =
-	Main.Size
+local OriginalSize = UDim2.fromOffset(
+	CONFIG.Width,
+	CONFIG.Height
+)
+
+local CollapsedSize = UDim2.fromOffset(
+	CONFIG.Width,
+	48
+)
 
 Collapse.MouseButton1Click:Connect(function()
 
-	collapsed = not collapsed
-	if collapsed then
+	Collapsed = not Collapsed
+
+	if Collapsed then
+
+		Collapse.Text = "+"
+
 		Content.Visible = false
+
 		tween(
 			Main,
 			{
-				Size = UDim2.fromOffset(
-					CONFIG.Width,
-					50
-				)
+				Size = CollapsedSize
 			},
-			0.18
+			CONFIG.CollapseTweenTime
 		)
-		Collapse.Text = "+"
+
 	else
+
+		Collapse.Text = "—"
+
+		Content.Visible = true
+
 		tween(
 			Main,
 			{
 				Size = OriginalSize
 			},
-			0.18
+			CONFIG.CollapseTweenTime
 		)
-		task.delay(0.1, function()
-			if not collapsed then
-				Content.Visible = true
-			end
-		end)
-		Collapse.Text = "—"
+
 	end
 
 end)
 
---==================================================
--- CLOSE CONFIRMATION
---==================================================
+--==============================================================
+-- CLOSE CONFIRMATION OVERLAY
+--==============================================================
 
 local ConfirmOverlay = Instance.new("Frame")
 
 ConfirmOverlay.Name = "CloseConfirmation"
 
-ConfirmOverlay.Size = UDim2.fromScale(1, 1)
+ConfirmOverlay.Size = UDim2.fromScale(
+	1,
+	1
+)
+
+ConfirmOverlay.Position = UDim2.fromScale(
+	0,
+	0
+)
 
 ConfirmOverlay.BackgroundColor3 =
 	Color3.fromRGB(0, 0, 0)
 
 ConfirmOverlay.BackgroundTransparency = 0.35
 
+ConfirmOverlay.BorderSizePixel = 0
+
 ConfirmOverlay.Visible = false
 
-ConfirmOverlay.ZIndex = 20
+ConfirmOverlay.ZIndex =
+	CONFIG.OverlayZIndex
+
 ConfirmOverlay.Parent = ScreenGui
 
--- Dialog
+--==============================================================
+-- CONFIRM BOX
+--==============================================================
+
 local ConfirmBox = Instance.new("Frame")
 
-ConfirmBox.Size = UDim2.fromOffset(230, 108)
-ConfirmBox.AnchorPoint = Vector2.new(0.5, 0.5)
-ConfirmBox.Position = UDim2.fromScale(0.5, 0.5)
+ConfirmBox.Name = "Dialog"
 
-ConfirmBox.BackgroundColor3 = CONFIG.PanelColor
+ConfirmBox.Size = UDim2.fromOffset(
+	230,
+	108
+)
+
+ConfirmBox.AnchorPoint =
+	Vector2.new(0.5, 0.5)
+
+ConfirmBox.Position =
+	UDim2.fromScale(
+		0.5,
+		0.5
+	)
+
+ConfirmBox.BackgroundColor3 =
+	CONFIG.PanelColor
+
 ConfirmBox.BackgroundTransparency = 0.02
 
 ConfirmBox.BorderSizePixel = 0
-ConfirmBox.ZIndex = 21
+
+ConfirmBox.ZIndex =
+	CONFIG.OverlayZIndex + 1
+
 ConfirmBox.Parent = ConfirmOverlay
 
-corner(ConfirmBox, 8)
-stroke(ConfirmBox, 0.82)
+addCorner(
+	ConfirmBox,
+	CONFIG.MainCornerRadius
+)
+
+addStroke(
+	ConfirmBox,
+	0.82,
+	1
+)
+
+--==============================================================
+-- CONFIRM TITLE
+--==============================================================
 
 local ConfirmTitle = createLabel(
+
 	ConfirmBox,
+
 	"ปิด BOWKAO SCRIPT?",
-	UDim2.new(1, -20, 0, 22),
-	UDim2.fromOffset(10, 9),
-	13
+
+	UDim2.new(
+		1,
+		-20,
+		0,
+		22
+	),
+
+	UDim2.fromOffset(
+		10,
+		9
+	),
+
+	13,
+
+	Enum.Font.GothamBold,
+
+	CONFIG.TextColor
+
 )
 
-ConfirmTitle.Font = Enum.Font.GothamBold
-ConfirmTitle.ZIndex = 22
+ConfirmTitle.ZIndex =
+	CONFIG.OverlayZIndex + 2
+
+--==============================================================
+-- CONFIRM DESCRIPTION
+--==============================================================
 
 local ConfirmDescription = createLabel(
-	ConfirmBox,
-	"ต้องการปิดหน้าต่างนี้หรือไม่",
-	UDim2.new(1, -20, 0, 18),
-	UDim2.fromOffset(10, 31),
-	9
-)
 
-ConfirmDescription.TextColor3 =
+	ConfirmBox,
+
+	"ต้องการปิดหน้าต่างนี้หรือไม่",
+
+	UDim2.new(
+		1,
+		-20,
+		0,
+		18
+	),
+
+	UDim2.fromOffset(
+		10,
+		32
+	),
+
+	9,
+
+	Enum.Font.Gotham,
+
 	CONFIG.SecondaryTextColor
 
-ConfirmDescription.ZIndex = 22
+)
 
--- Cancel
+ConfirmDescription.ZIndex =
+	CONFIG.OverlayZIndex + 2
+
+--==============================================================
+-- CANCEL BUTTON
+--==============================================================
+
 local Cancel = Instance.new("TextButton")
 
-Cancel.Size = UDim2.fromOffset(92, 27)
-Cancel.Position = UDim2.fromOffset(10, 70)
+Cancel.Name = "Cancel"
 
-Cancel.BackgroundColor3 = CONFIG.ButtonColor
-Cancel.BackgroundTransparency = CONFIG.ButtonTransparency
+Cancel.Size = UDim2.fromOffset(
+	92,
+	27
+)
 
-Cancel.Text = "ยกเลิก"
-Cancel.TextColor3 = CONFIG.TextColor
-Cancel.TextSize = 10
-Cancel.Font = Enum.Font.GothamBold
+Cancel.Position = UDim2.fromOffset(
+	10,
+	70
+)
+
+Cancel.BackgroundColor3 =
+	CONFIG.ButtonColor
+
+Cancel.BackgroundTransparency =
+	CONFIG.ButtonTransparency
+
+Cancel.BorderSizePixel = 0
 
 Cancel.AutoButtonColor = false
-Cancel.BorderSizePixel = 0
-Cancel.ZIndex = 22
+
+Cancel.Text = "ยกเลิก"
+
+Cancel.TextColor3 =
+	CONFIG.TextColor
+
+Cancel.TextSize = 10
+
+Cancel.Font =
+	Enum.Font.GothamBold
+
+Cancel.ZIndex =
+	CONFIG.OverlayZIndex + 2
 
 Cancel.Parent = ConfirmBox
 
-corner(Cancel, 6)
+addCorner(
+	Cancel,
+	CONFIG.ButtonCornerRadius
+)
 
--- Confirm
+--==============================================================
+-- CONFIRM BUTTON
+--==============================================================
+
 local Confirm = Instance.new("TextButton")
 
-Confirm.Size = UDim2.fromOffset(92, 27)
-Confirm.Position = UDim2.fromOffset(128, 70)
+Confirm.Name = "Confirm"
 
-Confirm.BackgroundColor3 = CONFIG.ButtonColor
-Confirm.BackgroundTransparency = CONFIG.ButtonTransparency
+Confirm.Size = UDim2.fromOffset(
+	92,
+	27
+)
 
-Confirm.Text = "ยืนยัน"
-Confirm.TextColor3 = CONFIG.TextColor
-Confirm.TextSize = 10
-Confirm.Font = Enum.Font.GothamBold
+Confirm.Position = UDim2.fromOffset(
+	128,
+	70
+)
+
+Confirm.BackgroundColor3 =
+	CONFIG.ButtonColor
+
+Confirm.BackgroundTransparency =
+	CONFIG.ButtonTransparency
+
+Confirm.BorderSizePixel = 0
 
 Confirm.AutoButtonColor = false
-Confirm.BorderSizePixel = 0
-Confirm.ZIndex = 22
+
+Confirm.Text = "ยืนยัน"
+
+Confirm.TextColor3 =
+	CONFIG.TextColor
+
+Confirm.TextSize = 10
+
+Confirm.Font =
+	Enum.Font.GothamBold
+
+Confirm.ZIndex =
+	CONFIG.OverlayZIndex + 2
 
 Confirm.Parent = ConfirmBox
 
-corner(Confirm, 6)
+addCorner(
+	Confirm,
+	CONFIG.ButtonCornerRadius
+)
 
 setupButton(Cancel)
 setupButton(Confirm)
+
+--==============================================================
+-- OPEN CLOSE CONFIRMATION
+--==============================================================
 
 Close.MouseButton1Click:Connect(function()
 
@@ -719,11 +1538,19 @@ Close.MouseButton1Click:Connect(function()
 
 end)
 
+--==============================================================
+-- CANCEL CLOSE
+--==============================================================
+
 Cancel.MouseButton1Click:Connect(function()
 
 	ConfirmOverlay.Visible = false
 
 end)
+
+--==============================================================
+-- CONFIRM CLOSE
+--==============================================================
 
 Confirm.MouseButton1Click:Connect(function()
 
@@ -731,80 +1558,274 @@ Confirm.MouseButton1Click:Connect(function()
 
 end)
 
---==================================================
+--==============================================================
 -- DRAG SYSTEM
---==================================================
+--==============================================================
 
-local dragging = false
-local dragStart
-local startPosition
+local Dragging = false
 
-local function updateDrag(input)
+local DragStart = nil
+local StartPosition = nil
 
-	local delta = input.Position - dragStart
-	Main.Position = UDim2.new(
-		startPosition.X.Scale,
-		startPosition.X.Offset + delta.X,
-		startPosition.Y.Scale,
-		startPosition.Y.Offset + delta.Y
+--==============================================================
+-- CLAMP POSITION
+--==============================================================
+
+local function clampPosition(position)
+
+	local Camera =
+		workspace.CurrentCamera
+
+	if not Camera then
+		return position
+	end
+
+	local Viewport =
+		Camera.ViewportSize
+
+	local Scale =
+		UIScale.Scale
+
+	if Scale <= 0 then
+		Scale = 1
+	end
+
+	local MainWidth =
+		Main.AbsoluteSize.X / Scale
+
+	local MainHeight =
+		Main.AbsoluteSize.Y / Scale
+
+	local X =
+		math.clamp(
+			position.X.Offset,
+			0,
+			math.max(
+				0,
+				Viewport.X - MainWidth
+			)
+		)
+
+	local Y =
+		math.clamp(
+			position.Y.Offset,
+			0,
+			math.max(
+				0,
+				Viewport.Y - MainHeight
+			)
+		)
+
+	return UDim2.fromOffset(
+		X,
+		Y
 	)
 
 end
 
-Header.InputBegan:Connect(function(input)
+--==============================================================
+-- UPDATE DRAG
+--==============================================================
 
-	if input.UserInputType == Enum.UserInputType.MouseButton1
-		or input.UserInputType == Enum.UserInputType.Touch then
-		dragging = true
-		dragStart = input.Position
-		startPosition = Main.Position
-		input.Changed:Connect(function()
-			if input.UserInputState ==
-				Enum.UserInputState.End then
-				dragging = false
-			end
-		end)
+local function updateDrag(input)
+
+	if not Dragging then
+		return
+	end
+
+	if not DragStart then
+		return
+	end
+
+	if not StartPosition then
+		return
+	end
+
+	local Delta =
+		input.Position - DragStart
+
+	local NewPosition =
+		UDim2.fromOffset(
+
+			StartPosition.X.Offset +
+				Delta.X,
+
+			StartPosition.Y.Offset +
+				Delta.Y
+
+		)
+
+	Main.Position =
+		clampPosition(
+			NewPosition
+		)
+
+end
+
+--==============================================================
+-- DRAG START
+--==============================================================
+
+DragArea.InputBegan:Connect(function(input)
+
+	if ConfirmOverlay.Visible then
+		return
+	end
+
+	if input.UserInputType ==
+		Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType ==
+		Enum.UserInputType.Touch then
+
+		Dragging = true
+
+		DragStart =
+			input.Position
+
+		StartPosition =
+			Main.Position
+
 	end
 
 end)
+
+--==============================================================
+-- DRAG END
+--==============================================================
+
+UserInputService.InputEnded:Connect(function(input)
+
+	if input.UserInputType ==
+		Enum.UserInputType.MouseButton1
+		or
+		input.UserInputType ==
+		Enum.UserInputType.Touch then
+
+		Dragging = false
+
+		DragStart = nil
+
+		StartPosition = nil
+
+	end
+
+end)
+
+--==============================================================
+-- DRAG MOVE
+--==============================================================
 
 UserInputService.InputChanged:Connect(function(input)
 
-	if dragging and (
-		input.UserInputType == Enum.UserInputType.MouseMovement
-		or input.UserInputType == Enum.UserInputType.Touch
-	) then
+	if not Dragging then
+		return
+	end
+
+	if input.UserInputType ==
+		Enum.UserInputType.MouseMovement
+		or
+		input.UserInputType ==
+		Enum.UserInputType.Touch then
+
 		updateDrag(input)
+
 	end
 
 end)
 
---==================================================
+--==============================================================
 -- RESPONSIVE SCALE
---==================================================
-
-local Camera = workspace.CurrentCamera
+--==============================================================
 
 local function updateScale()
+
+	local Camera =
+		workspace.CurrentCamera
 
 	if not Camera then
 		return
 	end
-	local viewport = Camera.ViewportSize
-	if viewport.X <= 500 then
+
+	local Viewport =
+		Camera.ViewportSize
+
+	local Width =
+		Viewport.X
+
+	if Width <= 420 then
+
+		UIScale.Scale = 0.82
+
+	elseif Width <= 500 then
+
 		UIScale.Scale = 0.88
-	elseif viewport.X <= 800 then
+
+	elseif Width <= 700 then
+
 		UIScale.Scale = 0.94
+
 	else
+
 		UIScale.Scale = 1
+
 	end
+
+	-- ป้องกัน UI หลุดจอหลัง Scale เปลี่ยน
+
+	Main.Position =
+		clampPosition(
+			Main.Position
+		)
 
 end
 
-if Camera then
+--==============================================================
+-- CAMERA CONNECTION
+--==============================================================
 
-	Camera:GetPropertyChangedSignal("ViewportSize")
-		:Connect(updateScale)
+local function connectCamera()
+
+	local Camera =
+		workspace.CurrentCamera
+
+	if not Camera then
+		return
+	end
+
+	Camera:GetPropertyChangedSignal(
+		"ViewportSize"
+	):Connect(function()
+
+		updateScale()
+
+	end)
+
 	updateScale()
 
 end
+
+connectCamera()
+
+workspace:GetPropertyChangedSignal(
+	"CurrentCamera"
+):Connect(function()
+
+	task.defer(
+		connectCamera
+	)
+
+end)
+
+--==============================================================
+-- FINAL INITIALIZATION
+--==============================================================
+
+Main.Position =
+	clampPosition(
+		Main.Position
+	)
+
+--==============================================================
+-- END
+--==============================================================
