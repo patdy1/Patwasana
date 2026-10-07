@@ -1,429 +1,813 @@
---// Player Profile HUD
---// Roblox UI Style
---// Rounded UI + Top Layer
---// Optimized LocalScript
+--[[
+    ================================================================
+    BOWKAO PLAYER PROFILE HUD V2
+    Production-Ready Roblox LocalScript
+    ================================================================
+
+    FEATURES
+    ----------------------------------------------------------------
+    • Modern Roblox-style profile HUD
+    • Rounded UI
+    • Player avatar
+    • Display Name
+    • Username
+    • Current local date
+    • Current local time
+    • Responsive scaling
+    • Safe avatar loading
+    • Connection cleanup
+    • Lightweight real-time clock
+    • Duplicate GUI protection
+    • Respawn safe
+
+    PERFORMANCE
+    ----------------------------------------------------------------
+    • No RenderStepped
+    • No Heartbeat
+    • No high-frequency loop
+    • Clock updates once per second
+    • Minimal UI instances
+    • Centralized cleanup
+
+    SAFETY
+    ----------------------------------------------------------------
+    • Does not modify Character
+    • Does not modify Humanoid
+    • Does not modify Tools
+    • Does not modify gameplay
+    ================================================================
+]]
+
+----------------------------------------------------------------
+-- SERVICES
+----------------------------------------------------------------
 
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
+----------------------------------------------------------------
+-- PLAYER
+----------------------------------------------------------------
 
---==================================================
+local Player = Players.LocalPlayer
+
+if not Player then
+    return
+end
+
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+----------------------------------------------------------------
 -- CONFIG
---==================================================
+----------------------------------------------------------------
 
 local CONFIG = {
 
-	GuiName = "PlayerProfileHUD",
+    ------------------------------------------------------------
+    -- GUI
+    ------------------------------------------------------------
 
-	-- Position / Size
-	Position = UDim2.fromOffset(10, 10),
-	Size = UDim2.fromOffset(152, 56),
+    GuiName = "PlayerProfileHUD",
 
-	--==================================================
-	-- ROBLOX UI COLORS
-	--==================================================
+    DisplayOrder = 999999,
 
-	-- Main Background
-	BackgroundColor = Color3.fromRGB(35, 37, 39),
-	BackgroundTransparency = 0.10,
+    Position = UDim2.fromOffset(10, 10),
 
-	-- Panel
-	PanelColor = Color3.fromRGB(46, 48, 51),
-	PanelTransparency = 0.08,
+    BaseSize = Vector2.new(164, 60),
 
-	-- Dark Panel
-	DarkPanelColor = Color3.fromRGB(25, 27, 29),
-	DarkPanelTransparency = 0.08,
+    ------------------------------------------------------------
+    -- RESPONSIVE
+    ------------------------------------------------------------
 
-	-- Normal Button
-	ButtonColor = Color3.fromRGB(55, 57, 60),
-	ButtonTransparency = 0.05,
+    ScaleSmall = 0.84,
+    ScaleMedium = 0.92,
+    ScaleLarge = 1,
 
-	-- Hover
-	HoverColor = Color3.fromRGB(70, 72, 75),
-	HoverTransparency = 0.02,
+    SmallViewportWidth = 380,
+    MediumViewportWidth = 600,
 
-	-- Pressed
-	PressedColor = Color3.fromRGB(85, 87, 90),
-	PressedTransparency = 0,
+    ------------------------------------------------------------
+    -- COLORS
+    ------------------------------------------------------------
 
-	-- Divider / Border
-	DividerColor = Color3.fromRGB(255, 255, 255),
-	DividerTransparency = 0.88,
+    BackgroundColor = Color3.fromRGB(35, 37, 39),
+    BackgroundTransparency = 0.08,
 
-	-- Main Text
-	TextColor = Color3.fromRGB(255, 255, 255),
-	TextTransparency = 0,
+    PanelColor = Color3.fromRGB(46, 48, 51),
+    PanelTransparency = 0.08,
 
-	-- Secondary Text
-	SecondaryTextColor = Color3.fromRGB(180, 180, 180),
-	SecondaryTextTransparency = 0.10,
+    DarkPanelColor = Color3.fromRGB(25, 27, 29),
+    DarkPanelTransparency = 0.04,
 
-	--==================================================
-	-- ROUNDING
-	--==================================================
+    BorderColor = Color3.fromRGB(255, 255, 255),
+    BorderTransparency = 0.86,
 
-	MainCornerRadius = 8,
-	PanelCornerRadius = 7,
-	AvatarCornerRadius = 7,
+    MainTextColor = Color3.fromRGB(255, 255, 255),
+    SecondaryTextColor = Color3.fromRGB(185, 185, 185),
 
-	--==================================================
-	-- AVATAR
-	--==================================================
+    ------------------------------------------------------------
+    -- BORDER
+    ------------------------------------------------------------
 
-	AvatarSize = 48,
-	AvatarPadding = 4,
+    MainCornerRadius = 9,
+    PanelCornerRadius = 7,
+    AvatarCornerRadius = 7,
 
-	--==================================================
-	-- TEXT
-	--==================================================
+    BorderThickness = 1,
 
-	Font = Enum.Font.Gotham,
-	TextSize = 9,
+    ------------------------------------------------------------
+    -- AVATAR
+    ------------------------------------------------------------
+
+    AvatarSize = 52,
+    AvatarPadding = 4,
+
+    ------------------------------------------------------------
+    -- INFORMATION PANEL
+    ------------------------------------------------------------
+
+    InfoX = 60,
+    InfoPadding = 5,
+
+    ------------------------------------------------------------
+    -- TEXT
+    ------------------------------------------------------------
+
+    NameTextSize = 11,
+    UsernameTextSize = 9,
+    DateTextSize = 9,
+    TimeTextSize = 9,
+
+    ------------------------------------------------------------
+    -- CLOCK
+    ------------------------------------------------------------
+
+    ClockInterval = 1,
 }
 
---==================================================
+----------------------------------------------------------------
+-- STATE
+----------------------------------------------------------------
+
+local State = {
+
+    Destroyed = false,
+
+    CurrentCamera = nil,
+
+    CurrentScale = 1,
+
+    ThumbnailLoaded = false,
+}
+
+----------------------------------------------------------------
+-- CONNECTIONS
+----------------------------------------------------------------
+
+local Connections = {}
+
+local function Connect(signal, callback)
+
+    if State.Destroyed then
+        return nil
+    end
+
+    local connection = signal:Connect(callback)
+
+    Connections[#Connections + 1] = connection
+
+    return connection
+end
+
+local function DisconnectAll()
+
+    for index = #Connections, 1, -1 do
+
+        local connection = Connections[index]
+
+        if connection then
+
+            pcall(function()
+                connection:Disconnect()
+            end)
+
+        end
+
+        Connections[index] = nil
+    end
+end
+
+----------------------------------------------------------------
+-- CLEANUP
+----------------------------------------------------------------
+
+local function Cleanup()
+
+    if State.Destroyed then
+        return
+    end
+
+    State.Destroyed = true
+
+    DisconnectAll()
+end
+
+----------------------------------------------------------------
 -- REMOVE OLD GUI
---==================================================
+----------------------------------------------------------------
 
-local oldGui = playerGui:FindFirstChild(CONFIG.GuiName)
+local OldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
 
-if oldGui then
-	oldGui:Destroy()
+if OldGui then
+
+    OldGui:Destroy()
+
 end
 
---==================================================
+----------------------------------------------------------------
 -- SCREEN GUI
---==================================================
+----------------------------------------------------------------
 
-local gui = Instance.new("ScreenGui")
+local Gui = Instance.new("ScreenGui")
 
-gui.Name = CONFIG.GuiName
+Gui.Name = CONFIG.GuiName
 
--- ไม่หายตอนเกิดใหม่
-gui.ResetOnSpawn = false
+Gui.ResetOnSpawn = false
 
--- ใช้พื้นที่ ScreenGui ปกติ
-gui.IgnoreGuiInset = false
+Gui.IgnoreGuiInset = false
 
--- ให้ ZIndex ทำงานเป็นชั้น
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+Gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
--- อยู่บนสุดของ ScreenGui อื่น
-gui.DisplayOrder = 999999
+Gui.DisplayOrder = CONFIG.DisplayOrder
 
-gui.Parent = playerGui
+Gui.Parent = PlayerGui
 
---==================================================
--- ROUND FUNCTION
---==================================================
+----------------------------------------------------------------
+-- GUI CLEANUP DETECTION
+----------------------------------------------------------------
 
-local function makeRounded(instance, radius)
+Connect(
+    Gui.Destroying,
+    function()
 
-	local corner = Instance.new("UICorner")
+        Cleanup()
 
-	corner.Name = "Corner"
-	corner.CornerRadius = UDim.new(0, radius)
+    end
+)
 
-	corner.Parent = instance
+----------------------------------------------------------------
+-- ROUNDING HELPER
+----------------------------------------------------------------
 
-	return corner
+local function AddCorner(parent, radius)
 
+    local corner = Instance.new("UICorner")
+
+    corner.Name = "Corner"
+
+    corner.CornerRadius = UDim.new(0, radius)
+
+    corner.Parent = parent
+
+    return corner
 end
 
---==================================================
+----------------------------------------------------------------
+-- STROKE HELPER
+----------------------------------------------------------------
+
+local function AddStroke(parent)
+
+    local stroke = Instance.new("UIStroke")
+
+    stroke.Name = "Border"
+
+    stroke.Color = CONFIG.BorderColor
+
+    stroke.Transparency = CONFIG.BorderTransparency
+
+    stroke.Thickness = CONFIG.BorderThickness
+
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+
+    stroke.Parent = parent
+
+    return stroke
+end
+
+----------------------------------------------------------------
 -- MAIN FRAME
---==================================================
+----------------------------------------------------------------
 
-local main = Instance.new("Frame")
+local Main = Instance.new("Frame")
 
-main.Name = "Main"
+Main.Name = "Main"
 
-main.Size = CONFIG.Size
-main.Position = CONFIG.Position
-
-main.BackgroundColor3 = CONFIG.BackgroundColor
-main.BackgroundTransparency = CONFIG.BackgroundTransparency
-
-main.BorderSizePixel = 0
-
--- Top layer
-main.ZIndex = 1000000
-
-main.Parent = gui
-
--- Rounded
-makeRounded(
-	main,
-	CONFIG.MainCornerRadius
+Main.Size = UDim2.fromOffset(
+    CONFIG.BaseSize.X,
+    CONFIG.BaseSize.Y
 )
 
---==================================================
--- MAIN BORDER
---==================================================
+Main.Position = CONFIG.Position
 
-local mainStroke = Instance.new("UIStroke")
+Main.BackgroundColor3 = CONFIG.BackgroundColor
 
-mainStroke.Name = "Border"
+Main.BackgroundTransparency = CONFIG.BackgroundTransparency
 
-mainStroke.Color = CONFIG.DividerColor
-mainStroke.Thickness = 1
-mainStroke.Transparency = CONFIG.DividerTransparency
+Main.BorderSizePixel = 0
 
-mainStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+Main.ClipsDescendants = true
 
-mainStroke.ZIndex = 1000001
+Main.ZIndex = 10
 
-mainStroke.Parent = main
+Main.Parent = Gui
 
---==================================================
+AddCorner(
+    Main,
+    CONFIG.MainCornerRadius
+)
+
+AddStroke(Main)
+
+----------------------------------------------------------------
+-- SCALE
+----------------------------------------------------------------
+
+local UIScale = Instance.new("UIScale")
+
+UIScale.Name = "ResponsiveScale"
+
+UIScale.Scale = 1
+
+UIScale.Parent = Main
+
+----------------------------------------------------------------
 -- AVATAR PANEL
---==================================================
+----------------------------------------------------------------
 
-local avatarPanel = Instance.new("Frame")
+local AvatarPanel = Instance.new("Frame")
 
-avatarPanel.Name = "AvatarPanel"
+AvatarPanel.Name = "AvatarPanel"
 
-avatarPanel.Size = UDim2.fromOffset(
-	CONFIG.AvatarSize,
-	CONFIG.AvatarSize
+AvatarPanel.Size = UDim2.fromOffset(
+    CONFIG.AvatarSize,
+    CONFIG.AvatarSize
 )
 
-avatarPanel.Position = UDim2.fromOffset(
-	CONFIG.AvatarPadding,
-	CONFIG.AvatarPadding
+AvatarPanel.Position = UDim2.fromOffset(
+    CONFIG.AvatarPadding,
+    CONFIG.AvatarPadding
 )
 
-avatarPanel.BackgroundColor3 = CONFIG.PanelColor
-avatarPanel.BackgroundTransparency = CONFIG.PanelTransparency
+AvatarPanel.BackgroundColor3 = CONFIG.PanelColor
 
-avatarPanel.BorderSizePixel = 0
+AvatarPanel.BackgroundTransparency = CONFIG.PanelTransparency
 
-avatarPanel.ZIndex = 1000001
+AvatarPanel.BorderSizePixel = 0
 
-avatarPanel.Parent = main
+AvatarPanel.ClipsDescendants = true
 
--- Rounded
-makeRounded(
-	avatarPanel,
-	CONFIG.PanelCornerRadius
+AvatarPanel.ZIndex = 11
+
+AvatarPanel.Parent = Main
+
+AddCorner(
+    AvatarPanel,
+    CONFIG.PanelCornerRadius
 )
 
---==================================================
+----------------------------------------------------------------
 -- AVATAR
---==================================================
+----------------------------------------------------------------
 
-local profile = Instance.new("ImageLabel")
+local Profile = Instance.new("ImageLabel")
 
-profile.Name = "Avatar"
+Profile.Name = "Avatar"
 
-profile.Size = UDim2.fromScale(1, 1)
-profile.Position = UDim2.fromOffset(0, 0)
+Profile.Size = UDim2.fromScale(1, 1)
 
-profile.BackgroundColor3 = CONFIG.DarkPanelColor
-profile.BackgroundTransparency = CONFIG.DarkPanelTransparency
+Profile.Position = UDim2.fromOffset(0, 0)
 
-profile.BorderSizePixel = 0
+Profile.BackgroundColor3 = CONFIG.DarkPanelColor
 
-profile.ScaleType = Enum.ScaleType.Crop
+Profile.BackgroundTransparency = CONFIG.DarkPanelTransparency
 
-profile.Image = ""
+Profile.BorderSizePixel = 0
 
-profile.ZIndex = 1000002
+Profile.Image = ""
 
-profile.Parent = avatarPanel
+Profile.ScaleType = Enum.ScaleType.Crop
 
--- Rounded
-makeRounded(
-	profile,
-	CONFIG.AvatarCornerRadius
+Profile.ZIndex = 12
+
+Profile.Parent = AvatarPanel
+
+AddCorner(
+    Profile,
+    CONFIG.AvatarCornerRadius
 )
 
---==================================================
+----------------------------------------------------------------
 -- INFORMATION PANEL
---==================================================
+----------------------------------------------------------------
 
-local info = Instance.new("Frame")
+local Info = Instance.new("Frame")
 
-info.Name = "Info"
+Info.Name = "Info"
 
-info.Size = UDim2.fromOffset(92, 48)
-info.Position = UDim2.fromOffset(56, 4)
-
-info.BackgroundColor3 = CONFIG.PanelColor
-info.BackgroundTransparency = CONFIG.PanelTransparency
-
-info.BorderSizePixel = 0
-
-info.ZIndex = 1000001
-
-info.Parent = main
-
--- Rounded
-makeRounded(
-	info,
-	CONFIG.PanelCornerRadius
+Info.Size = UDim2.new(
+    1,
+    -(CONFIG.InfoX + CONFIG.InfoPadding),
+    1,
+    -(CONFIG.InfoPadding * 2)
 )
 
---==================================================
+Info.Position = UDim2.fromOffset(
+    CONFIG.InfoX,
+    CONFIG.InfoPadding
+)
+
+Info.BackgroundColor3 = CONFIG.PanelColor
+
+Info.BackgroundTransparency = CONFIG.PanelTransparency
+
+Info.BorderSizePixel = 0
+
+Info.ClipsDescendants = true
+
+Info.ZIndex = 11
+
+Info.Parent = Main
+
+AddCorner(
+    Info,
+    CONFIG.PanelCornerRadius
+)
+
+----------------------------------------------------------------
 -- TEXT CREATOR
---==================================================
+----------------------------------------------------------------
 
-local function createText(
-	name,
-	y,
-	color,
-	transparency
+local function CreateText(
+    name,
+    y,
+    height,
+    textSize,
+    color,
+    font
 )
 
-	local label = Instance.new("TextLabel")
+    local Label = Instance.new("TextLabel")
 
-	label.Name = name
+    Label.Name = name
 
-	label.Size = UDim2.new(
-		1,
-		-8,
-		0,
-		11
-	)
+    Label.Size = UDim2.new(
+        1,
+        -10,
+        0,
+        height
+    )
 
-	label.Position = UDim2.fromOffset(
-		4,
-		y
-	)
+    Label.Position = UDim2.fromOffset(
+        5,
+        y
+    )
 
-	label.BackgroundTransparency = 1
+    Label.BackgroundTransparency = 1
 
-	label.BorderSizePixel = 0
+    Label.BorderSizePixel = 0
 
-	label.TextColor3 = color
-	label.TextTransparency = transparency
+    Label.Text = ""
 
-	label.Font = CONFIG.Font
-	label.TextSize = CONFIG.TextSize
+    Label.TextColor3 = color
 
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextYAlignment = Enum.TextYAlignment.Center
+    Label.TextTransparency = 0
 
-	label.TextTruncate = Enum.TextTruncate.AtEnd
+    Label.Font = font or Enum.Font.Gotham
 
-	label.RichText = false
+    Label.TextSize = textSize
 
-	label.ZIndex = 1000002
+    Label.TextXAlignment = Enum.TextXAlignment.Left
 
-	label.Parent = info
+    Label.TextYAlignment = Enum.TextYAlignment.Center
 
-	return label
+    Label.TextTruncate = Enum.TextTruncate.AtEnd
 
+    Label.RichText = false
+
+    Label.ZIndex = 12
+
+    Label.Parent = Info
+
+    return Label
 end
 
---==================================================
+----------------------------------------------------------------
 -- TEXT ELEMENTS
---==================================================
+----------------------------------------------------------------
 
-local nameText = createText(
-	"DisplayName",
-	0,
-	CONFIG.TextColor,
-	CONFIG.TextTransparency
+local NameText = CreateText(
+    "DisplayName",
+    1,
+    14,
+    CONFIG.NameTextSize,
+    CONFIG.MainTextColor,
+    Enum.Font.GothamBold
 )
 
-local userText = createText(
-	"Username",
-	12,
-	CONFIG.SecondaryTextColor,
-	CONFIG.SecondaryTextTransparency
+local UsernameText = CreateText(
+    "Username",
+    15,
+    10,
+    CONFIG.UsernameTextSize,
+    CONFIG.SecondaryTextColor
 )
 
-local dateText = createText(
-	"Date",
-	24,
-	CONFIG.SecondaryTextColor,
-	CONFIG.SecondaryTextTransparency
+local DateText = CreateText(
+    "Date",
+    25,
+    10,
+    CONFIG.DateTextSize,
+    CONFIG.SecondaryTextColor
 )
 
-local timeText = createText(
-	"Time",
-	36,
-	CONFIG.SecondaryTextColor,
-	CONFIG.SecondaryTextTransparency
+local TimeText = CreateText(
+    "Time",
+    35,
+    10,
+    CONFIG.TimeTextSize,
+    CONFIG.SecondaryTextColor
 )
 
---==================================================
--- PLAYER INFORMATION
---==================================================
+----------------------------------------------------------------
+-- PLAYER DATA
+----------------------------------------------------------------
 
-nameText.Text = player.DisplayName
+local function UpdatePlayerData()
 
-userText.Text = "@" .. player.Name
+    if State.Destroyed then
+        return
+    end
 
---==================================================
--- AVATAR LOADING
---==================================================
+    if not Player.Parent then
+        return
+    end
 
-task.spawn(function()
+    NameText.Text = Player.DisplayName
 
-	local success, image = pcall(function()
-
-		return Players:GetUserThumbnailAsync(
-			player.UserId,
-			Enum.ThumbnailType.HeadShot,
-			Enum.ThumbnailSize.Size100x100
-		)
-
-	end)
-
-	if success and image then
-
-		profile.Image = image
-
-	end
-
-end)
-
---==================================================
--- DATE / TIME
---==================================================
-
-local function updateDateTime()
-
-	local t = os.date("*t")
-
-	dateText.Text = string.format(
-		"%02d/%02d/%04d",
-		t.day,
-		t.month,
-		t.year
-	)
-
-	timeText.Text = string.format(
-		"%02d:%02d:%02d",
-		t.hour,
-		t.min,
-		t.sec
-	)
-
+    UsernameText.Text = "@" .. Player.Name
 end
 
---==================================================
--- INITIAL UPDATE
---==================================================
+----------------------------------------------------------------
+-- DATE / TIME
+----------------------------------------------------------------
 
-updateDateTime()
+local function UpdateDateTime()
 
---==================================================
--- REAL-TIME CLOCK
---==================================================
+    if State.Destroyed then
+        return
+    end
+
+    if not Gui.Parent then
+        return
+    end
+
+    local Timestamp = os.date("*t")
+
+    if not Timestamp then
+        return
+    end
+
+    DateText.Text = string.format(
+        "%02d/%02d/%04d",
+        Timestamp.day,
+        Timestamp.month,
+        Timestamp.year
+    )
+
+    TimeText.Text = string.format(
+        "%02d:%02d:%02d",
+        Timestamp.hour,
+        Timestamp.min,
+        Timestamp.sec
+    )
+end
+
+----------------------------------------------------------------
+-- AVATAR
+----------------------------------------------------------------
+
+local function LoadAvatar()
+
+    if State.Destroyed then
+        return
+    end
+
+    local success, image = pcall(function()
+
+        return Players:GetUserThumbnailAsync(
+            Player.UserId,
+            Enum.ThumbnailType.HeadShot,
+            Enum.ThumbnailSize.Size100x100
+        )
+
+    end)
+
+    if State.Destroyed then
+        return
+    end
+
+    if not Gui.Parent then
+        return
+    end
+
+    if success and image and image ~= "" then
+
+        Profile.Image = image
+
+        State.ThumbnailLoaded = true
+
+    end
+end
+
+----------------------------------------------------------------
+-- RESPONSIVE SCALE
+----------------------------------------------------------------
+
+local function GetResponsiveScale(viewportWidth)
+
+    if viewportWidth <= CONFIG.SmallViewportWidth then
+
+        return CONFIG.ScaleSmall
+
+    elseif viewportWidth <= CONFIG.MediumViewportWidth then
+
+        return CONFIG.ScaleMedium
+
+    end
+
+    return CONFIG.ScaleLarge
+end
+
+----------------------------------------------------------------
+-- UPDATE RESPONSIVE SCALE
+----------------------------------------------------------------
+
+local function UpdateScale()
+
+    if State.Destroyed then
+        return
+    end
+
+    local Camera = Workspace.CurrentCamera
+
+    if not Camera then
+        return
+    end
+
+    State.CurrentCamera = Camera
+
+    local ViewportSize = Camera.ViewportSize
+
+    local NewScale = GetResponsiveScale(
+        ViewportSize.X
+    )
+
+    if math.abs(NewScale - State.CurrentScale) < 0.001 then
+        return
+    end
+
+    State.CurrentScale = NewScale
+
+    UIScale.Scale = NewScale
+end
+
+----------------------------------------------------------------
+-- CAMERA BINDING
+----------------------------------------------------------------
+
+local CameraViewportConnection = nil
+
+local function BindCamera(Camera)
+
+    if CameraViewportConnection then
+
+        pcall(function()
+            CameraViewportConnection:Disconnect()
+        end)
+
+        CameraViewportConnection = nil
+    end
+
+    State.CurrentCamera = Camera
+
+    if not Camera then
+        return
+    end
+
+    CameraViewportConnection =
+        Camera:GetPropertyChangedSignal("ViewportSize"):Connect(
+            function()
+
+                UpdateScale()
+
+            end
+        )
+
+    UpdateScale()
+end
+
+----------------------------------------------------------------
+-- CAMERA CHANGE
+----------------------------------------------------------------
+
+Connect(
+    Workspace:GetPropertyChangedSignal("CurrentCamera"),
+    function()
+
+        BindCamera(
+            Workspace.CurrentCamera
+        )
+
+    end
+)
+
+----------------------------------------------------------------
+-- INITIAL CAMERA
+----------------------------------------------------------------
+
+BindCamera(
+    Workspace.CurrentCamera
+)
+
+----------------------------------------------------------------
+-- PLAYER DATA INITIAL
+----------------------------------------------------------------
+
+UpdatePlayerData()
+
+UpdateDateTime()
+
+----------------------------------------------------------------
+-- PLAYER DISPLAY NAME CHANGE
+----------------------------------------------------------------
+
+Connect(
+    Player:GetPropertyChangedSignal("DisplayName"),
+    function()
+
+        UpdatePlayerData()
+
+    end
+)
+
+----------------------------------------------------------------
+-- CLOCK LOOP
+----------------------------------------------------------------
 
 task.spawn(function()
 
-	while gui.Parent do
+    while not State.Destroyed
+        and Gui.Parent
+    do
 
-		updateDateTime()
+        UpdateDateTime()
 
-		task.wait(1)
+        task.wait(CONFIG.ClockInterval)
 
-	end
+    end
 
 end)
+
+----------------------------------------------------------------
+-- AVATAR LOADING
+----------------------------------------------------------------
+
+task.spawn(function()
+
+    LoadAvatar()
+
+end)
+
+----------------------------------------------------------------
+-- FINAL SAFETY
+----------------------------------------------------------------
+
+Connect(
+    Player.AncestryChanged,
+    function(_, parent)
+
+        if not parent then
+
+            Cleanup()
+
+        end
+
+    end
+)
+
+----------------------------------------------------------------
+-- READY
+----------------------------------------------------------------
+
+print("[PlayerProfileHUD V2] Initialized")
