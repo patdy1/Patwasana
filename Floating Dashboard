@@ -5,13 +5,18 @@
 	Roblox Client / LocalScript
 
 	Production Features:
+	• Current Roblox username branding
+	• Dynamic username text fitting
 	• Player Avatar branding
 	• Exact centered initial placement
 	• Mathematically balanced 2x2 card grid
-	• Derived layout geometry
-	• Zero intentional UI overlap
-	• No vertical accent bars
-	• Balanced header / content / footer spacing
+	• Real ScrollingFrame content system
+	• Mouse Wheel scrolling
+	• Touch / Swipe scrolling
+	• iPhone-style scroll indicator
+	• Proportional scroll indicator
+	• Indicator position synchronized with real CanvasPosition
+	• Indicator hidden when content does not overflow
 	• Responsive desktop / tablet / mobile
 	• Touch + Mouse support
 	• Stable center-based dragging
@@ -29,90 +34,49 @@
 	• Error-safe network sampling
 ]]
 
---//==================================================
---// SERVICES
---//==================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local TextService = game:GetService("TextService")
 
 local Player = Players.LocalPlayer
-
 if not Player then
 	return
 end
 
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
---//==================================================
---// CONFIGURATION
---//==================================================
-
 local CONFIG = {
-
 	GuiName = "BowkaoNetworkDashboard",
 	DestroyExistingGui = true,
 
-	--//==================================================
-	--// BASE SIZE
-	--//==================================================
-
 	Width = 300,
-
-	-- 0 = automatically calculated from layout.
-	-- This prevents footer/card overlap if layout values change.
 	Height = 0,
 
 	CollapsedHeight = 52,
 
-	-- True mathematical center.
 	Position = UDim2.fromScale(0.5, 0.5),
-
-	--//==================================================
-	--// UPDATE
-	--//==================================================
 
 	UpdateRate = 0.25,
 	FPSSampleRate = 0.5,
 
-	--//==================================================
-	--// ANIMATION
-	--//==================================================
-
 	TweenTime = 0.14,
 	FastTweenTime = 0.10,
 	CollapseTweenTime = 0.20,
-
-	--//==================================================
-	--// MAIN COLORS
-	--//==================================================
 
 	MainColor = Color3.fromRGB(31, 33, 36),
 	HeaderColor = Color3.fromRGB(24, 26, 29),
 	CardColor = Color3.fromRGB(40, 43, 47),
 	FooterColor = Color3.fromRGB(25, 27, 30),
 
-	--//==================================================
-	--// BUTTON COLORS
-	--//==================================================
-
 	ButtonColor = Color3.fromRGB(48, 51, 55),
 	ButtonHoverColor = Color3.fromRGB(61, 64, 69),
 	ButtonPressedColor = Color3.fromRGB(76, 79, 84),
 
-	--//==================================================
-	--// TEXT
-	--//==================================================
-
 	TextColor = Color3.fromRGB(245, 246, 248),
 	SecondaryTextColor = Color3.fromRGB(157, 161, 168),
 	MutedTextColor = Color3.fromRGB(112, 116, 123),
-
-	--//==================================================
-	--// STATUS
-	--//==================================================
 
 	GoodColor = Color3.fromRGB(100, 255, 130),
 	WarningColor = Color3.fromRGB(255, 220, 80),
@@ -120,26 +84,14 @@ local CONFIG = {
 	BadColor = Color3.fromRGB(255, 80, 80),
 	NeutralColor = Color3.fromRGB(160, 164, 171),
 
-	--//==================================================
-	--// TRANSPARENCY
-	--//==================================================
-
 	MainTransparency = 0.04,
 	HeaderTransparency = 0.02,
 	CardTransparency = 0.04,
 	FooterTransparency = 0.02,
 
-	--//==================================================
-	--// BORDERS
-	--//==================================================
-
 	MainStrokeTransparency = 0.78,
 	CardStrokeTransparency = 0.90,
 	ButtonStrokeTransparency = 0.88,
-
-	--//==================================================
-	--// RADIUS
-	--//==================================================
 
 	MainRadius = 11,
 	HeaderRadius = 9,
@@ -148,31 +100,15 @@ local CONFIG = {
 	DialogRadius = 11,
 	AvatarRadius = 9,
 
-	--//==================================================
-	--// LAYOUT
-	--//==================================================
-
 	OuterPadding = 8,
-
 	HeaderHeight = 44,
-
-	-- Uniform vertical rhythm.
-	-- Header -> Content = 8
 	HeaderContentGap = 8,
 
-	-- Card geometry.
-	-- CardWidth is derived automatically.
 	CardHeight = 57,
 	CardGap = 8,
 
-	-- Content -> Footer.
 	ContentBottomGap = 8,
-
 	FooterHeight = 24,
-
-	--//==================================================
-	--// RESPONSIVE
-	--//==================================================
 
 	MobileScale = 0.84,
 	SmallScale = 0.90,
@@ -182,36 +118,34 @@ local CONFIG = {
 	ScreenPadding = 7,
 
 	ReopenEnabled = true,
-}
 
---//==================================================
---// DERIVED LAYOUT
---//==================================================
+	-- Scroll configuration
+	ScrollBarThickness = 0,
+	ScrollIndicatorSidePadding = 8,
+	ScrollIndicatorBottomPadding = 3,
+	ScrollIndicatorHeight = 4,
+
+	-- Minimum iPhone-like indicator size.
+	-- This is only a minimum visual size; actual position/range
+	-- is always calculated from the real scroll range.
+	ScrollIndicatorMinimumWidth = 18,
+
+	-- Username fitting
+	UsernameMaxTextSize = 12,
+	UsernameMinTextSize = 8,
+}
 
 local LAYOUT = {}
 
--- Available inner width.
 LAYOUT.ContentWidth =
-	CONFIG.Width
-	- (CONFIG.OuterPadding * 2)
+	CONFIG.Width - (CONFIG.OuterPadding * 2)
 
--- Exact 2-column width.
 LAYOUT.CardWidth =
 	(LAYOUT.ContentWidth - CONFIG.CardGap) / 2
 
--- Two cards + center gap.
 LAYOUT.ContentHeight =
-	(CONFIG.CardHeight * 2)
-	+ CONFIG.CardGap
+	(CONFIG.CardHeight * 2) + CONFIG.CardGap
 
--- Header:
--- top padding
--- header
--- gap
--- content
--- gap
--- footer
--- bottom padding
 LAYOUT.ContentTop =
 	CONFIG.OuterPadding
 	+ CONFIG.HeaderHeight
@@ -227,22 +161,11 @@ LAYOUT.CalculatedHeight =
 	+ CONFIG.FooterHeight
 	+ CONFIG.OuterPadding
 
--- Allow manual height only if it is larger than
--- the mathematically required height.
 LAYOUT.ExpandedHeight =
-	math.max(
-		CONFIG.Height,
-		LAYOUT.CalculatedHeight
-	)
-
---//==================================================
---// STATE
---//==================================================
+	math.max(CONFIG.Height, LAYOUT.CalculatedHeight)
 
 local State = {
-
 	Destroyed = false,
-
 	Collapsed = false,
 	ConfirmVisible = false,
 	DashboardVisible = true,
@@ -262,115 +185,79 @@ local State = {
 
 	CurrentCamera = nil,
 	ViewportUpdateQueued = false,
-
 	UpdateRunning = false,
-}
 
---//==================================================
---// RESOURCE MANAGEMENT
---//==================================================
+	ScrollUpdateQueued = false,
+}
 
 local Connections = {}
 local ActiveTweens = {}
-
 local ButtonStates = {}
 local ButtonScales = {}
 
 local CameraViewportConnection = nil
-
 local AnimationToken = 0
 
 local function disconnectConnection(connection)
-
 	if connection and connection.Connected then
 		connection:Disconnect()
 	end
 end
 
 local function addConnection(connection)
-
 	if not connection then
 		return nil
 	end
 
 	if State.Destroyed then
-
 		disconnectConnection(connection)
-
 		return nil
 	end
 
-	table.insert(
-		Connections,
-		connection
-	)
+	table.insert(Connections, connection)
 
 	return connection
 end
 
 local function connect(signal, callback)
-
 	if State.Destroyed or not signal then
 		return nil
 	end
 
-	return addConnection(
-		signal:Connect(callback)
-	)
+	return addConnection(signal:Connect(callback))
 end
 
 local function disconnectAll()
-
 	for index = #Connections, 1, -1 do
-
-		disconnectConnection(
-			Connections[index]
-		)
-
+		disconnectConnection(Connections[index])
 		Connections[index] = nil
 	end
 end
 
 local function disconnectCameraViewport()
-
 	if CameraViewportConnection then
-
-		disconnectConnection(
-			CameraViewportConnection
-		)
-
+		disconnectConnection(CameraViewportConnection)
 		CameraViewportConnection = nil
 	end
 end
 
---//==================================================
---// TWEEN MANAGEMENT
---//==================================================
-
 local function stopTween(object)
-
 	if not object then
 		return
 	end
 
-	local entry =
-		ActiveTweens[object]
+	local entry = ActiveTweens[object]
 
 	if not entry then
 		return
 	end
 
 	if entry.Connection then
-
-		disconnectConnection(
-			entry.Connection
-		)
-
+		disconnectConnection(entry.Connection)
 		entry.Connection = nil
 	end
 
 	if entry.Tween then
-
 		entry.Tween:Cancel()
 		entry.Tween = nil
 	end
@@ -385,7 +272,6 @@ local function playTween(
 	easingStyle,
 	easingDirection
 )
-
 	if State.Destroyed then
 		return nil
 	end
@@ -396,36 +282,19 @@ local function playTween(
 
 	stopTween(object)
 
-	local tween
-
-	local success, result =
-		pcall(
-			function()
-
-				return TweenService:Create(
-
-					object,
-
-					TweenInfo.new(
-						duration or CONFIG.TweenTime,
-						easingStyle or Enum.EasingStyle.Quart,
-						easingDirection
-							or Enum.EasingDirection.Out
-					),
-
-					properties
-				)
-
-			end
+	local success, tween = pcall(function()
+		return TweenService:Create(
+			object,
+			TweenInfo.new(
+				duration or CONFIG.TweenTime,
+				easingStyle or Enum.EasingStyle.Quart,
+				easingDirection or Enum.EasingDirection.Out
+			),
+			properties
 		)
+	end)
 
-	if not success then
-		return nil
-	end
-
-	tween = result
-
-	if not tween then
+	if not success or not tween then
 		return nil
 	end
 
@@ -434,98 +303,64 @@ local function playTween(
 		Connection = nil,
 	}
 
-	ActiveTweens[object] =
-		entry
+	ActiveTweens[object] = entry
 
-	entry.Connection =
-		tween.Completed:Connect(
-			function()
+	entry.Connection = tween.Completed:Connect(function()
+		local current = ActiveTweens[object]
 
-				local current =
-					ActiveTweens[object]
+		if current ~= entry then
+			return
+		end
 
-				if current ~= entry then
-					return
-				end
+		if entry.Connection then
+			disconnectConnection(entry.Connection)
+			entry.Connection = nil
+		end
 
-				if entry.Connection then
-
-					disconnectConnection(
-						entry.Connection
-					)
-
-					entry.Connection = nil
-				end
-
-				ActiveTweens[object] = nil
-			end
-		)
+		ActiveTweens[object] = nil
+	end)
 
 	tween:Play()
 
 	return tween
 end
 
-local function waitForTween(
-	tween,
-	callback
-)
-
+local function waitForTween(tween, callback)
 	if not tween or State.Destroyed then
 		return
 	end
 
 	local connection
 
-	connection =
-		tween.Completed:Connect(
-			function(playbackState)
+	connection = tween.Completed:Connect(function(playbackState)
+		if connection then
+			disconnectConnection(connection)
+			connection = nil
+		end
 
-				if connection then
+		if State.Destroyed then
+			return
+		end
 
-					disconnectConnection(
-						connection
-					)
+		if playbackState ~= Enum.PlaybackState.Completed then
+			return
+		end
 
-					connection = nil
-				end
-
-				if State.Destroyed then
-					return
-				end
-
-				if playbackState
-					~= Enum.PlaybackState.Completed then
-
-					return
-				end
-
-				if callback then
-					callback()
-				end
-			end
-		)
+		if callback then
+			callback()
+		end
+	end)
 end
 
 local function cancelAllTweens()
-
-	for object, entry in pairs(
-		ActiveTweens
-	) do
-
+	for object, entry in pairs(ActiveTweens) do
 		if entry then
-
 			if entry.Connection then
-
-				disconnectConnection(
-					entry.Connection
-				)
-
+				disconnectConnection(entry.Connection)
 				entry.Connection = nil
 			end
 
 			if entry.Tween then
-
 				entry.Tween:Cancel()
 				entry.Tween = nil
 			end
@@ -535,58 +370,24 @@ local function cancelAllTweens()
 	end
 end
 
---//==================================================
---// UI HELPERS
---//==================================================
-
-local function createCorner(
-	parent,
-	radius
-)
-
-	local corner =
-		Instance.new("UICorner")
+local function createCorner(parent, radius)
+	local corner = Instance.new("UICorner")
 
 	corner.Name = "Corner"
-
-	corner.CornerRadius =
-		UDim.new(
-			0,
-			radius
-		)
-
+	corner.CornerRadius = UDim.new(0, radius)
 	corner.Parent = parent
 
 	return corner
 end
 
-local function createStroke(
-	parent,
-	transparency,
-	thickness
-)
-
-	local stroke =
-		Instance.new("UIStroke")
+local function createStroke(parent, transparency, thickness)
+	local stroke = Instance.new("UIStroke")
 
 	stroke.Name = "Border"
-
-	stroke.Color =
-		Color3.fromRGB(
-			255,
-			255,
-			255
-		)
-
-	stroke.Transparency =
-		transparency
-
-	stroke.Thickness =
-		thickness or 1
-
-	stroke.ApplyStrokeMode =
-		Enum.ApplyStrokeMode.Border
-
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = transparency
+	stroke.Thickness = thickness or 1
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Parent = parent
 
 	return stroke
@@ -600,12 +401,9 @@ local function createLabel(
 	position,
 	textSize
 )
-
-	local label =
-		Instance.new("TextLabel")
+	local label = Instance.new("TextLabel")
 
 	label.Name = name
-
 	label.Size = size
 	label.Position = position
 
@@ -613,26 +411,17 @@ local function createLabel(
 	label.BorderSizePixel = 0
 
 	label.Text = text
+	label.TextColor3 = CONFIG.TextColor
+	label.TextSize = textSize or 12
 
-	label.TextColor3 =
-		CONFIG.TextColor
+	label.Font = Enum.Font.Gotham
 
-	label.TextSize =
-		textSize or 12
+	label.TextXAlignment = Enum.TextXAlignment.Left
+	label.TextYAlignment = Enum.TextYAlignment.Center
 
-	label.Font =
-		Enum.Font.Gotham
-
-	label.TextXAlignment =
-		Enum.TextXAlignment.Left
-
-	label.TextYAlignment =
-		Enum.TextYAlignment.Center
-
-	label.TextTruncate =
-		Enum.TextTruncate.AtEnd
-
+	label.TextTruncate = Enum.TextTruncate.AtEnd
 	label.RichText = false
+
 	label.Active = false
 	label.Selectable = false
 
@@ -648,37 +437,20 @@ local function createButton(
 	parent,
 	size
 )
-
-	local button =
-		Instance.new("TextButton")
+	local button = Instance.new("TextButton")
 
 	button.Name = name
-
-	button.Size =
-		size or
-		UDim2.fromOffset(
-			28,
-			28
-		)
-
+	button.Size = size or UDim2.fromOffset(28, 28)
 	button.Position = position
 
-	button.BackgroundColor3 =
-		CONFIG.ButtonColor
-
+	button.BackgroundColor3 = CONFIG.ButtonColor
 	button.BackgroundTransparency = 0
-
 	button.BorderSizePixel = 0
 
 	button.Text = text
-
-	button.TextColor3 =
-		CONFIG.TextColor
-
+	button.TextColor3 = CONFIG.TextColor
 	button.TextSize = 14
-
-	button.Font =
-		Enum.Font.GothamBold
+	button.Font = Enum.Font.GothamBold
 
 	button.AutoButtonColor = false
 	button.Active = true
@@ -687,78 +459,40 @@ local function createButton(
 	button.ZIndex = 20
 	button.Parent = parent
 
-	createCorner(
-		button,
-		CONFIG.ButtonRadius
-	)
+	createCorner(button, CONFIG.ButtonRadius)
+	createStroke(button, CONFIG.ButtonStrokeTransparency)
 
-	createStroke(
-		button,
-		CONFIG.ButtonStrokeTransparency
-	)
+	local scale = Instance.new("UIScale")
 
-	local scale =
-		Instance.new("UIScale")
-
-	scale.Name =
-		"InteractionScale"
-
+	scale.Name = "InteractionScale"
 	scale.Scale = 1
 	scale.Parent = button
 
-	ButtonScales[button] =
-		scale
+	ButtonScales[button] = scale
 
 	return button
 end
 
---//==================================================
---// REMOVE OLD GUI
---//==================================================
-
 if CONFIG.DestroyExistingGui then
-
-	local oldGui =
-		PlayerGui:FindFirstChild(
-			CONFIG.GuiName
-		)
+	local oldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
 
 	if oldGui then
 		oldGui:Destroy()
 	end
 end
 
---//==================================================
---// SCREEN GUI
---//==================================================
+local ScreenGui = Instance.new("ScreenGui")
 
-local ScreenGui =
-	Instance.new("ScreenGui")
-
-ScreenGui.Name =
-	CONFIG.GuiName
-
+ScreenGui.Name = CONFIG.GuiName
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = false
+ScreenGui.ScreenInsets = Enum.ScreenInsets.CoreUISafeInsets
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.DisplayOrder = 999999
 
-ScreenGui.ScreenInsets =
-	Enum.ScreenInsets.CoreUISafeInsets
+ScreenGui.Parent = PlayerGui
 
-ScreenGui.ZIndexBehavior =
-	Enum.ZIndexBehavior.Sibling
-
-ScreenGui.DisplayOrder =
-	999999
-
-ScreenGui.Parent =
-	PlayerGui
-
---//==================================================
---// MAIN
---//==================================================
-
-local Main =
-	Instance.new("Frame")
+local Main = Instance.new("Frame")
 
 Main.Name = "Main"
 
@@ -768,60 +502,29 @@ Main.Size =
 		LAYOUT.ExpandedHeight
 	)
 
-Main.AnchorPoint =
-	Vector2.new(
-		0.5,
-		0.5
-	)
+Main.AnchorPoint = Vector2.new(0.5, 0.5)
+Main.Position = CONFIG.Position
 
-Main.Position =
-	CONFIG.Position
-
-Main.BackgroundColor3 =
-	CONFIG.MainColor
-
-Main.BackgroundTransparency =
-	CONFIG.MainTransparency
-
+Main.BackgroundColor3 = CONFIG.MainColor
+Main.BackgroundTransparency = CONFIG.MainTransparency
 Main.BorderSizePixel = 0
+
 Main.Active = true
 Main.ClipsDescendants = true
 
 Main.ZIndex = 10
 Main.Parent = ScreenGui
 
-createCorner(
-	Main,
-	CONFIG.MainRadius
-)
+createCorner(Main, CONFIG.MainRadius)
+createStroke(Main, CONFIG.MainStrokeTransparency)
 
-createStroke(
-	Main,
-	CONFIG.MainStrokeTransparency
-)
+local UIScale = Instance.new("UIScale")
 
---//==================================================
---// RESPONSIVE SCALE
---//==================================================
+UIScale.Name = "ResponsiveScale"
+UIScale.Scale = CONFIG.DesktopScale
+UIScale.Parent = Main
 
-local UIScale =
-	Instance.new("UIScale")
-
-UIScale.Name =
-	"ResponsiveScale"
-
-UIScale.Scale =
-	CONFIG.DesktopScale
-
-UIScale.Parent =
-	Main
-
---//==================================================
---// HEADER
---//==================================================
-
-local Header =
-	Instance.new("Frame")
+local Header = Instance.new("Frame")
 
 Header.Name = "Header"
 
@@ -839,120 +542,67 @@ Header.Position =
 		CONFIG.OuterPadding
 	)
 
-Header.BackgroundColor3 =
-	CONFIG.HeaderColor
-
-Header.BackgroundTransparency =
-	CONFIG.HeaderTransparency
-
+Header.BackgroundColor3 = CONFIG.HeaderColor
+Header.BackgroundTransparency = CONFIG.HeaderTransparency
 Header.BorderSizePixel = 0
 
 Header.ZIndex = 11
 Header.Parent = Main
 
-createCorner(
-	Header,
-	CONFIG.HeaderRadius
-)
+createCorner(Header, CONFIG.HeaderRadius)
 
---//==================================================
---// PLAYER AVATAR
---//==================================================
+local AvatarFrame = Instance.new("Frame")
 
-local AvatarFrame =
-	Instance.new("Frame")
+AvatarFrame.Name = "PlayerAvatar"
+AvatarFrame.Size = UDim2.fromOffset(32, 32)
+AvatarFrame.Position = UDim2.fromOffset(7, 6)
 
-AvatarFrame.Name =
-	"PlayerAvatar"
-
-AvatarFrame.Size =
-	UDim2.fromOffset(
-		32,
-		32
-	)
-
-AvatarFrame.Position =
-	UDim2.fromOffset(
-		7,
-		6
-	)
-
-AvatarFrame.BackgroundColor3 =
-	CONFIG.ButtonColor
-
+AvatarFrame.BackgroundColor3 = CONFIG.ButtonColor
 AvatarFrame.BorderSizePixel = 0
-
 AvatarFrame.ClipsDescendants = true
 
 AvatarFrame.ZIndex = 13
 AvatarFrame.Parent = Header
 
-createCorner(
-	AvatarFrame,
-	CONFIG.AvatarRadius
-)
-
+createCorner(AvatarFrame, CONFIG.AvatarRadius)
 createStroke(
 	AvatarFrame,
 	CONFIG.ButtonStrokeTransparency
 )
 
-local AvatarImage =
-	Instance.new("ImageLabel")
+local AvatarImage = Instance.new("ImageLabel")
 
-AvatarImage.Name =
-	"Avatar"
+AvatarImage.Name = "Avatar"
 
-AvatarImage.Size =
-	UDim2.fromScale(
-		1,
-		1
-	)
-
-AvatarImage.Position =
-	UDim2.fromScale(
-		0,
-		0
-	)
+AvatarImage.Size = UDim2.fromScale(1, 1)
+AvatarImage.Position = UDim2.fromScale(0, 0)
 
 AvatarImage.BackgroundTransparency = 1
 AvatarImage.BorderSizePixel = 0
 
-AvatarImage.ScaleType =
-	Enum.ScaleType.Crop
+AvatarImage.ScaleType = Enum.ScaleType.Crop
 
 AvatarImage.ZIndex = 14
 AvatarImage.Parent = AvatarFrame
 
-createCorner(
-	AvatarImage,
-	CONFIG.AvatarRadius
-)
+createCorner(AvatarImage, CONFIG.AvatarRadius)
 
 local function getAvatarImage()
+	local success, image = pcall(function()
+		local content =
+			Players:GetUserThumbnailAsync(
+				Player.UserId,
+				Enum.ThumbnailType.HeadShot,
+				Enum.ThumbnailSize.Size420x420
+			)
 
-	local success, image =
-		pcall(
-			function()
-
-				local content =
-					Players:GetUserThumbnailAsync(
-
-						Player.UserId,
-
-						Enum.ThumbnailType.HeadShot,
-
-						Enum.ThumbnailSize.Size420x420
-					)
-
-				return content
-			end
-		)
+		return content
+	end)
 
 	if success
 		and typeof(image) == "string"
-		and image ~= "" then
-
+		and image ~= ""
+	then
 		return image
 	end
 
@@ -962,22 +612,12 @@ local function getAvatarImage()
 	)
 end
 
-AvatarImage.Image =
-	getAvatarImage()
+AvatarImage.Image = getAvatarImage()
 
---//==================================================
---// DRAG AREA
---//==================================================
+local DragArea = Instance.new("TextButton")
 
-local DragArea =
-	Instance.new("TextButton")
+DragArea.Name = "DragArea"
 
-DragArea.Name =
-	"DragArea"
-
--- Header width = 284.
--- Avatar/title region ends before LIVE.
--- LIVE + buttons have their own safe area.
 DragArea.Size =
 	UDim2.new(
 		1,
@@ -986,177 +626,198 @@ DragArea.Size =
 		0
 	)
 
-DragArea.Position =
-	UDim2.fromOffset(
-		43,
-		0
-	)
+DragArea.Position = UDim2.fromOffset(43, 0)
 
 DragArea.BackgroundTransparency = 1
 DragArea.BorderSizePixel = 0
 
 DragArea.Text = ""
 DragArea.AutoButtonColor = false
-
 DragArea.Active = true
 DragArea.Selectable = false
 
 DragArea.ZIndex = 12
 DragArea.Parent = Header
 
-local Title =
-	createLabel(
-		DragArea,
-		"Title",
-		"BOWKAO NETWORK",
-		UDim2.new(
-			1,
-			-6,
-			0,
-			18
-		),
-		UDim2.fromOffset(
-			2,
-			5
-		),
-		12
-	)
+local Title = createLabel(
+	DragArea,
+	"Title",
+	Player.Name,
+	UDim2.new(1, -6, 0, 18),
+	UDim2.fromOffset(2, 5),
+	12
+)
 
-Title.Font =
-	Enum.Font.GothamBold
-
+Title.Font = Enum.Font.GothamBold
 Title.ZIndex = 14
 
-local Subtitle =
-	createLabel(
-		DragArea,
-		"Subtitle",
-		"PREMIUM PERFORMANCE HUD",
-		UDim2.new(
-			1,
-			-6,
-			0,
-			12
-		),
-		UDim2.fromOffset(
-			2,
-			25
-		),
-		8
-	)
+Title.TextTruncate = Enum.TextTruncate.AtEnd
 
-Subtitle.TextColor3 =
-	CONFIG.SecondaryTextColor
+local Subtitle = createLabel(
+	DragArea,
+	"Subtitle",
+	"PREMIUM PERFORMANCE HUD",
+	UDim2.new(1, -6, 0, 12),
+	UDim2.fromOffset(2, 25),
+	8
+)
 
+Subtitle.TextColor3 = CONFIG.SecondaryTextColor
 Subtitle.ZIndex = 14
 
---//==================================================
---// LIVE INDICATOR
---//==================================================
+local LiveDot = Instance.new("Frame")
 
-local LiveDot =
-	Instance.new("Frame")
+LiveDot.Name = "LiveDot"
+LiveDot.Size = UDim2.fromOffset(6, 6)
+LiveDot.Position = UDim2.fromOffset(190, 19)
 
-LiveDot.Name =
-	"LiveDot"
-
-LiveDot.Size =
-	UDim2.fromOffset(
-		6,
-		6
-	)
-
-LiveDot.Position =
-	UDim2.fromOffset(
-		190,
-		19
-	)
-
-LiveDot.BackgroundColor3 =
-	CONFIG.GoodColor
-
+LiveDot.BackgroundColor3 = CONFIG.GoodColor
 LiveDot.BorderSizePixel = 0
 
 LiveDot.ZIndex = 14
 LiveDot.Parent = Header
 
-createCorner(
-	LiveDot,
-	6
+createCorner(LiveDot, 6)
+
+local LiveText = createLabel(
+	Header,
+	"LiveText",
+	"LIVE",
+	UDim2.fromOffset(26, 14),
+	UDim2.fromOffset(200, 14),
+	8
 )
 
-local LiveText =
-	createLabel(
-		Header,
-		"LiveText",
-		"LIVE",
-		UDim2.fromOffset(
-			26,
-			14
-		),
-		UDim2.fromOffset(
-			200,
-			14
-		),
-		8
-	)
-
-LiveText.TextColor3 =
-	CONFIG.GoodColor
-
-LiveText.TextXAlignment =
-	Enum.TextXAlignment.Left
-
-LiveText.Font =
-	Enum.Font.GothamBold
-
+LiveText.TextColor3 = CONFIG.GoodColor
+LiveText.TextXAlignment = Enum.TextXAlignment.Left
+LiveText.Font = Enum.Font.GothamBold
 LiveText.ZIndex = 14
 
---//==================================================
---// HEADER BUTTONS
---//==================================================
+local Collapse = createButton(
+	"Collapse",
+	"—",
+	UDim2.fromOffset(227, 8),
+	Header,
+	UDim2.fromOffset(23, 28)
+)
 
-local Collapse =
-	createButton(
-		"Collapse",
-		"—",
-		UDim2.fromOffset(
-			227,
-			8
-		),
-		Header,
-		UDim2.fromOffset(
-			23,
-			28
-		)
-	)
-
-local Close =
-	createButton(
-		"Close",
-		"×",
-		UDim2.fromOffset(
-			253,
-			8
-		),
-		Header,
-		UDim2.fromOffset(
-			23,
-			28
-		)
-	)
+local Close = createButton(
+	"Close",
+	"×",
+	UDim2.fromOffset(253, 8),
+	Header,
+	UDim2.fromOffset(23, 28)
+)
 
 Close.TextSize = 16
 
---//==================================================
---// CONTENT
---//==================================================
+--==============================================================
+-- USERNAME AUTO-FIT
+--==============================================================
 
-local Content =
-	Instance.new("Frame")
+local function updateUsernameDisplay()
+	if State.Destroyed then
+		return
+	end
 
-Content.Name =
-	"Content"
+	if not Title or not Title.Parent then
+		return
+	end
+
+	local username = Player.Name
+
+	if typeof(username) ~= "string"
+		or username == ""
+	then
+		username = "PLAYER"
+	end
+
+	Title.Text = username
+
+	Title.Size =
+		UDim2.new(
+			1,
+			-6,
+			0,
+			18
+		)
+
+	Title.Position =
+		UDim2.fromOffset(
+			2,
+			5
+		)
+
+	Title.TextXAlignment =
+		Enum.TextXAlignment.Left
+
+	Title.TextTruncate =
+		Enum.TextTruncate.AtEnd
+
+	Title.Font =
+		Enum.Font.GothamBold
+
+	-- The title width is derived from the existing header geometry.
+	local headerWidth =
+		CONFIG.Width
+		- (CONFIG.OuterPadding * 2)
+
+	local dragWidth =
+		headerWidth - 138
+
+	local titleWidth =
+		math.max(
+			1,
+			dragWidth - 6
+		)
+
+	local selectedSize =
+		CONFIG.UsernameMinTextSize
+
+	for textSize =
+		CONFIG.UsernameMaxTextSize,
+		CONFIG.UsernameMinTextSize,
+		-1
+	do
+		local success, bounds =
+			pcall(function()
+				return TextService:GetTextSize(
+					username,
+					textSize,
+					Enum.Font.GothamBold,
+					Vector2.new(
+						titleWidth,
+						18
+					)
+				)
+			end)
+
+		if success
+			and bounds
+			and bounds.X <= titleWidth
+		then
+			selectedSize = textSize
+			break
+		end
+	end
+
+	Title.TextSize = selectedSize
+end
+
+updateUsernameDisplay()
+
+connect(
+	Player:GetPropertyChangedSignal("Name"),
+	updateUsernameDisplay
+)
+
+--==============================================================
+-- REAL SCROLL CONTENT
+--==============================================================
+
+local Content = Instance.new("ScrollingFrame")
+
+Content.Name = "Content"
 
 Content.Size =
 	UDim2.new(
@@ -1175,21 +836,258 @@ Content.Position =
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
 
+Content.CanvasSize =
+	UDim2.fromOffset(
+		LAYOUT.ContentWidth,
+		LAYOUT.ContentHeight
+	)
+
+Content.CanvasPosition =
+	Vector2.zero
+
+Content.ScrollBarThickness =
+	CONFIG.ScrollBarThickness
+
+Content.ScrollBarImageTransparency = 1
+
+Content.ScrollingDirection =
+	Enum.ScrollingDirection.Y
+
+Content.ElasticBehavior =
+	Enum.ElasticBehavior.Always
+
+Content.ScrollingEnabled = true
+
+Content.Active = true
+
 Content.ZIndex = 11
 Content.Parent = Main
 
---//==================================================
---// CARD
---//==================================================
+--==============================================================
+-- iPHONE STYLE SCROLL INDICATOR
+--==============================================================
 
-local function createCard(
-	name,
-	x,
-	y
+local ScrollIndicator = Instance.new("Frame")
+
+ScrollIndicator.Name = "ScrollIndicator"
+
+ScrollIndicator.AnchorPoint =
+	Vector2.new(0, 1)
+
+ScrollIndicator.Position =
+	UDim2.new(
+		0,
+		CONFIG.ScrollIndicatorSidePadding,
+		1,
+		-CONFIG.ScrollIndicatorBottomPadding
+	)
+
+ScrollIndicator.Size =
+	UDim2.fromOffset(
+		0,
+		CONFIG.ScrollIndicatorHeight
+	)
+
+ScrollIndicator.BackgroundColor3 =
+	Color3.fromRGB(255, 255, 255)
+
+ScrollIndicator.BackgroundTransparency = 0
+
+ScrollIndicator.BorderSizePixel = 0
+
+ScrollIndicator.Visible = false
+
+ScrollIndicator.Active = false
+ScrollIndicator.Selectable = false
+
+ScrollIndicator.ZIndex = 30
+ScrollIndicator.Parent = Content
+
+createCorner(
+	ScrollIndicator,
+	CONFIG.ScrollIndicatorHeight
 )
 
-	local card =
-		Instance.new("Frame")
+--==============================================================
+-- SCROLL METRICS
+--==============================================================
+
+local function getScrollMetrics()
+	if State.Destroyed then
+		return nil
+	end
+
+	if not Content
+		or not Content.Parent
+	then
+		return nil
+	end
+
+	local visibleHeight =
+		Content.AbsoluteSize.Y
+
+	local contentHeight =
+		math.max(
+			Content.AbsoluteCanvasSize.Y,
+			0
+		)
+
+	local currentScroll =
+		math.max(
+			Content.CanvasPosition.Y,
+			0
+		)
+
+	local maximumScroll =
+		math.max(
+			contentHeight - visibleHeight,
+			0
+		)
+
+	return {
+		VisibleHeight = visibleHeight,
+		ContentHeight = contentHeight,
+		CurrentScroll = currentScroll,
+		MaximumScroll = maximumScroll,
+	}
+end
+
+local function updateScrollIndicator()
+	if State.Destroyed then
+		return
+	end
+
+	if not Content
+		or not Content.Parent
+		or not ScrollIndicator
+		or not ScrollIndicator.Parent
+	then
+		return
+	end
+
+	local metrics =
+		getScrollMetrics()
+
+	if not metrics then
+		return
+	end
+
+	local visibleHeight =
+		metrics.VisibleHeight
+
+	local contentHeight =
+		metrics.ContentHeight
+
+	local currentScroll =
+		metrics.CurrentScroll
+
+	local maximumScroll =
+		metrics.MaximumScroll
+
+	-- No overflow = no indicator.
+	if visibleHeight <= 0
+		or contentHeight <= visibleHeight + 0.01
+		or maximumScroll <= 0.01
+	then
+		ScrollIndicator.Visible = false
+		return
+	end
+
+	local trackWidth =
+		math.max(
+			Content.AbsoluteSize.X
+				- (
+					CONFIG.ScrollIndicatorSidePadding
+					* 2
+				),
+			1
+		)
+
+	-- True proportional indicator size:
+	--
+	-- visible area / total content area
+	--
+	-- The indicator is never allowed to become smaller
+	-- than the configured visual minimum.
+	local proportionalWidth =
+		trackWidth
+		* (
+			visibleHeight
+			/ contentHeight
+		)
+
+	local indicatorWidth =
+		math.clamp(
+			proportionalWidth,
+			CONFIG.ScrollIndicatorMinimumWidth,
+			trackWidth
+		)
+
+	local movableRange =
+		math.max(
+			trackWidth
+				- indicatorWidth,
+			0
+		)
+
+	local scrollRatio =
+		math.clamp(
+			currentScroll
+				/ maximumScroll,
+			0,
+			1
+		)
+
+	local indicatorOffset =
+		movableRange
+		* scrollRatio
+
+	ScrollIndicator.Size =
+		UDim2.fromOffset(
+			indicatorWidth,
+			CONFIG.ScrollIndicatorHeight
+		)
+
+	ScrollIndicator.Position =
+		UDim2.new(
+			0,
+			CONFIG.ScrollIndicatorSidePadding
+				+ indicatorOffset,
+			1,
+			-CONFIG.ScrollIndicatorBottomPadding
+		)
+
+	ScrollIndicator.Visible = true
+end
+
+local function queueScrollIndicatorUpdate()
+	if State.Destroyed then
+		return
+	end
+
+	if State.ScrollUpdateQueued then
+		return
+	end
+
+	State.ScrollUpdateQueued = true
+
+	task.defer(function()
+		State.ScrollUpdateQueued = false
+
+		if State.Destroyed then
+			return
+		end
+
+		updateScrollIndicator()
+	end)
+end
+
+--==============================================================
+-- CARDS
+--==============================================================
+
+local function createCard(name, x, y)
+	local card = Instance.new("Frame")
 
 	card.Name = name
 
@@ -1235,24 +1133,14 @@ local function configureCardText(
 	valueText,
 	valueSize
 )
-
-	local title =
-		createLabel(
-			card,
-			"Title",
-			titleText,
-			UDim2.new(
-				1,
-				-20,
-				0,
-				15
-			),
-			UDim2.fromOffset(
-				10,
-				6
-			),
-			9
-		)
+	local title = createLabel(
+		card,
+		"Title",
+		titleText,
+		UDim2.new(1, -20, 0, 15),
+		UDim2.fromOffset(10, 6),
+		9
+	)
 
 	title.TextColor3 =
 		CONFIG.SecondaryTextColor
@@ -1262,23 +1150,14 @@ local function configureCardText(
 
 	title.ZIndex = 14
 
-	local value =
-		createLabel(
-			card,
-			"Value",
-			valueText,
-			UDim2.new(
-				1,
-				-20,
-				0,
-				28
-			),
-			UDim2.fromOffset(
-				10,
-				22
-			),
-			valueSize
-		)
+	local value = createLabel(
+		card,
+		"Value",
+		valueText,
+		UDim2.new(1, -20, 0, 28),
+		UDim2.fromOffset(10, 22),
+		valueSize
+	)
 
 	value.Font =
 		Enum.Font.GothamBold
@@ -1287,10 +1166,6 @@ local function configureCardText(
 
 	return title, value
 end
-
---//==================================================
---// CARDS
---//==================================================
 
 local PingCard =
 	createCard(
@@ -1310,8 +1185,7 @@ local _, PingValue =
 local FPSCard =
 	createCard(
 		"FPS",
-		LAYOUT.CardWidth
-			+ CONFIG.CardGap,
+		LAYOUT.CardWidth + CONFIG.CardGap,
 		0
 	)
 
@@ -1327,8 +1201,7 @@ local ConnectionCard =
 	createCard(
 		"Connection",
 		0,
-		CONFIG.CardHeight
-			+ CONFIG.CardGap
+		CONFIG.CardHeight + CONFIG.CardGap
 	)
 
 local _, ConnectionValue =
@@ -1342,10 +1215,8 @@ local _, ConnectionValue =
 local PlayersCard =
 	createCard(
 		"Players",
-		LAYOUT.CardWidth
-			+ CONFIG.CardGap,
-		CONFIG.CardHeight
-			+ CONFIG.CardGap
+		LAYOUT.CardWidth + CONFIG.CardGap,
+		CONFIG.CardHeight + CONFIG.CardGap
 	)
 
 local _, PlayersValue =
@@ -1356,15 +1227,60 @@ local _, PlayersValue =
 		15
 	)
 
---//==================================================
---// FOOTER
---//==================================================
+--==============================================================
+-- UPDATE CANVAS SIZE FROM REAL CONTENT
+--==============================================================
 
-local Footer =
-	Instance.new("Frame")
+local function updateContentCanvasSize()
+	if State.Destroyed then
+		return
+	end
 
-Footer.Name =
-	"Footer"
+	if not Content
+		or not Content.Parent
+	then
+		return
+	end
+
+	local requiredWidth =
+		Content.AbsoluteSize.X
+
+	local requiredHeight =
+		LAYOUT.ContentHeight
+
+	for _, child in ipairs(Content:GetChildren()) do
+		if child:IsA("GuiObject")
+			and child ~= ScrollIndicator
+			and child.Visible
+		then
+			local bottom =
+				child.Position.Y.Offset
+				+ child.AbsoluteSize.Y
+
+			requiredHeight =
+				math.max(
+					requiredHeight,
+					bottom
+				)
+		end
+	end
+
+	Content.CanvasSize =
+		UDim2.fromOffset(
+			math.max(requiredWidth, 0),
+			math.max(requiredHeight, 0)
+		)
+
+	queueScrollIndicatorUpdate()
+end
+
+--==============================================================
+-- FOOTER
+--==============================================================
+
+local Footer = Instance.new("Frame")
+
+Footer.Name = "Footer"
 
 Footer.Size =
 	UDim2.new(
@@ -1401,23 +1317,15 @@ createStroke(
 	CONFIG.CardStrokeTransparency
 )
 
-local StatusDot =
-	Instance.new("Frame")
+local StatusDot = Instance.new("Frame")
 
-StatusDot.Name =
-	"StatusDot"
+StatusDot.Name = "StatusDot"
 
 StatusDot.Size =
-	UDim2.fromOffset(
-		6,
-		6
-	)
+	UDim2.fromOffset(6, 6)
 
 StatusDot.Position =
-	UDim2.fromOffset(
-		9,
-		9
-	)
+	UDim2.fromOffset(9, 9)
 
 StatusDot.BackgroundColor3 =
 	CONFIG.NeutralColor
@@ -1427,28 +1335,16 @@ StatusDot.BorderSizePixel = 0
 StatusDot.ZIndex = 14
 StatusDot.Parent = Footer
 
-createCorner(
-	StatusDot,
-	6
-)
+createCorner(StatusDot, 6)
 
-local StatusText =
-	createLabel(
-		Footer,
-		"StatusText",
-		"CONNECTING...",
-		UDim2.new(
-			1,
-			-28,
-			1,
-			0
-		),
-		UDim2.fromOffset(
-			20,
-			0
-		),
-		9
-	)
+local StatusText = createLabel(
+	Footer,
+	"StatusText",
+	"CONNECTING...",
+	UDim2.new(1, -28, 1, 0),
+	UDim2.fromOffset(20, 0),
+	9
+)
 
 StatusText.TextColor3 =
 	CONFIG.SecondaryTextColor
@@ -1458,27 +1354,19 @@ StatusText.Font =
 
 StatusText.ZIndex = 14
 
---//==================================================
---// REOPEN BUTTON
---//==================================================
+--==============================================================
+-- REOPEN BUTTON
+--==============================================================
 
-local ReopenButton =
-	Instance.new("TextButton")
+local ReopenButton = Instance.new("TextButton")
 
-ReopenButton.Name =
-	"Reopen"
+ReopenButton.Name = "Reopen"
 
 ReopenButton.Size =
-	UDim2.fromOffset(
-		44,
-		44
-	)
+	UDim2.fromOffset(44, 44)
 
 ReopenButton.AnchorPoint =
-	Vector2.new(
-		0.5,
-		0.5
-	)
+	Vector2.new(0.5, 0.5)
 
 ReopenButton.Position =
 	Main.Position
@@ -1486,16 +1374,16 @@ ReopenButton.Position =
 ReopenButton.BackgroundColor3 =
 	CONFIG.MainColor
 
-ReopenButton.BackgroundTransparency =
-	0.02
+ReopenButton.BackgroundTransparency = 0.02
 
 ReopenButton.BorderSizePixel = 0
 
 ReopenButton.Text = ""
-ReopenButton.AutoButtonColor = false
 
+ReopenButton.AutoButtonColor = false
 ReopenButton.Active = true
 ReopenButton.Selectable = true
+
 ReopenButton.ClipsDescendants = true
 
 ReopenButton.Visible = false
@@ -1513,29 +1401,18 @@ createStroke(
 	CONFIG.MainStrokeTransparency
 )
 
-local ReopenAvatar =
-	Instance.new("ImageLabel")
+local ReopenAvatar = Instance.new("ImageLabel")
 
-ReopenAvatar.Name =
-	"Avatar"
+ReopenAvatar.Name = "Avatar"
 
 ReopenAvatar.Size =
-	UDim2.fromOffset(
-		30,
-		30
-	)
+	UDim2.fromOffset(30, 30)
 
 ReopenAvatar.AnchorPoint =
-	Vector2.new(
-		0.5,
-		0.5
-	)
+	Vector2.new(0.5, 0.5)
 
 ReopenAvatar.Position =
-	UDim2.fromScale(
-		0.5,
-		0.5
-	)
+	UDim2.fromScale(0.5, 0.5)
 
 ReopenAvatar.BackgroundTransparency = 1
 ReopenAvatar.BorderSizePixel = 0
@@ -1547,42 +1424,30 @@ ReopenAvatar.Image =
 	AvatarImage.Image
 
 ReopenAvatar.ZIndex = 21
-ReopenAvatar.Parent =
-	ReopenButton
+ReopenAvatar.Parent = ReopenButton
 
 createCorner(
 	ReopenAvatar,
 	8
 )
 
---//==================================================
---// CONFIRMATION OVERLAY
---//==================================================
+--==============================================================
+-- CONFIRMATION
+--==============================================================
 
-local ConfirmOverlay =
-	Instance.new("TextButton")
+local ConfirmOverlay = Instance.new("TextButton")
 
 ConfirmOverlay.Name =
 	"CloseConfirmation"
 
 ConfirmOverlay.Size =
-	UDim2.fromScale(
-		1,
-		1
-	)
+	UDim2.fromScale(1, 1)
 
 ConfirmOverlay.Position =
-	UDim2.fromScale(
-		0,
-		0
-	)
+	UDim2.fromScale(0, 0)
 
 ConfirmOverlay.BackgroundColor3 =
-	Color3.fromRGB(
-		0,
-		0,
-		0
-	)
+	Color3.fromRGB(0, 0, 0)
 
 ConfirmOverlay.BackgroundTransparency =
 	0.42
@@ -1590,8 +1455,8 @@ ConfirmOverlay.BackgroundTransparency =
 ConfirmOverlay.BorderSizePixel = 0
 
 ConfirmOverlay.Text = ""
-ConfirmOverlay.AutoButtonColor = false
 
+ConfirmOverlay.AutoButtonColor = false
 ConfirmOverlay.Active = true
 ConfirmOverlay.Selectable = false
 
@@ -1600,33 +1465,18 @@ ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 100
 ConfirmOverlay.Parent = ScreenGui
 
---//==================================================
---// CONFIRM BOX
---//==================================================
+local ConfirmBox = Instance.new("Frame")
 
-local ConfirmBox =
-	Instance.new("Frame")
-
-ConfirmBox.Name =
-	"Dialog"
+ConfirmBox.Name = "Dialog"
 
 ConfirmBox.Size =
-	UDim2.fromOffset(
-		252,
-		122
-	)
+	UDim2.fromOffset(252, 122)
 
 ConfirmBox.AnchorPoint =
-	Vector2.new(
-		0.5,
-		0.5
-	)
+	Vector2.new(0.5, 0.5)
 
 ConfirmBox.Position =
-	UDim2.fromScale(
-		0.5,
-		0.5
-	)
+	UDim2.fromScale(0.5, 0.5)
 
 ConfirmBox.BackgroundColor3 =
 	CONFIG.MainColor
@@ -1636,8 +1486,7 @@ ConfirmBox.BackgroundTransparency = 0
 ConfirmBox.BorderSizePixel = 0
 
 ConfirmBox.ZIndex = 101
-ConfirmBox.Parent =
-	ConfirmOverlay
+ConfirmBox.Parent = ConfirmOverlay
 
 createCorner(
 	ConfirmBox,
@@ -1649,46 +1498,28 @@ createStroke(
 	CONFIG.MainStrokeTransparency
 )
 
-local ConfirmTitle =
-	createLabel(
-		ConfirmBox,
-		"Title",
-		"ปิด BOWKAO NETWORK?",
-		UDim2.new(
-			1,
-			-24,
-			0,
-			22
-		),
-		UDim2.fromOffset(
-			12,
-			10
-		),
-		14
-	)
+local ConfirmTitle = createLabel(
+	ConfirmBox,
+	"Title",
+	"ปิด BOWKAO NETWORK?",
+	UDim2.new(1, -24, 0, 22),
+	UDim2.fromOffset(12, 10),
+	14
+)
 
 ConfirmTitle.Font =
 	Enum.Font.GothamBold
 
 ConfirmTitle.ZIndex = 103
 
-local ConfirmDescription =
-	createLabel(
-		ConfirmBox,
-		"Description",
-		"ต้องการซ่อน Dashboard นี้หรือไม่",
-		UDim2.new(
-			1,
-			-24,
-			0,
-			18
-		),
-		UDim2.fromOffset(
-			12,
-			34
-		),
-		9
-	)
+local ConfirmDescription = createLabel(
+	ConfirmBox,
+	"Description",
+	"ต้องการซ่อน Dashboard นี้หรือไม่",
+	UDim2.new(1, -24, 0, 18),
+	UDim2.fromOffset(12, 34),
+	9
+)
 
 ConfirmDescription.TextColor3 =
 	CONFIG.SecondaryTextColor
@@ -1700,48 +1531,33 @@ local function createConfirmButton(
 	text,
 	x
 )
-
-	local button =
-		Instance.new("TextButton")
+	local button = Instance.new("TextButton")
 
 	button.Name = name
 
 	button.Size =
-		UDim2.fromOffset(
-			103,
-			29
-		)
+		UDim2.fromOffset(103, 29)
 
 	button.Position =
-		UDim2.fromOffset(
-			x,
-			82
-		)
+		UDim2.fromOffset(x, 82)
 
 	button.BackgroundColor3 =
 		CONFIG.ButtonColor
 
 	button.BackgroundTransparency = 0
-
 	button.BorderSizePixel = 0
 
 	button.Text = text
-
-	button.TextColor3 =
-		CONFIG.TextColor
-
+	button.TextColor3 = CONFIG.TextColor
 	button.TextSize = 10
-
-	button.Font =
-		Enum.Font.GothamBold
+	button.Font = Enum.Font.GothamBold
 
 	button.AutoButtonColor = false
 	button.Active = true
 	button.Selectable = true
 
 	button.ZIndex = 103
-	button.Parent =
-		ConfirmBox
+	button.Parent = ConfirmBox
 
 	createCorner(
 		button,
@@ -1770,88 +1586,57 @@ local Confirm =
 		139
 	)
 
---//==================================================
---// NETWORK / PERFORMANCE
---//==================================================
+--==============================================================
+-- NETWORK / PERFORMANCE
+--==============================================================
 
-local function getPingState(
-	ping
-)
-
+local function getPingState(ping)
 	if ping <= 50 then
-
-		return CONFIG.GoodColor,
-			"EXCELLENT"
-
+		return CONFIG.GoodColor, "EXCELLENT"
 	elseif ping <= 100 then
-
-		return CONFIG.WarningColor,
-			"GOOD"
-
+		return CONFIG.WarningColor, "GOOD"
 	elseif ping <= 200 then
-
-		return CONFIG.HighColor,
-			"HIGH"
-
+		return CONFIG.HighColor, "HIGH"
 	else
-
-		return CONFIG.BadColor,
-			"VERY HIGH"
+		return CONFIG.BadColor, "VERY HIGH"
 	end
 end
 
 local function getPing()
-
 	if State.Destroyed then
 		return nil
 	end
 
 	local success, seconds =
-		pcall(
-			function()
-
-				return Player:GetNetworkPing()
-
-			end
-		)
+		pcall(function()
+			return Player:GetNetworkPing()
+		end)
 
 	if not success then
 		return nil
 	end
 
-	if typeof(seconds)
-		~= "number" then
-
+	if typeof(seconds) ~= "number" then
 		return nil
 	end
 
 	if seconds < 0
-		or seconds ~= seconds then
-
+		or seconds ~= seconds
+	then
 		return nil
 	end
 
 	return math.floor(
-		seconds * 1000
-			+ 0.5
+		seconds * 1000 + 0.5
 	)
 end
 
---//==================================================
---// FPS
---//==================================================
-
-local function updateFPS(
-	deltaTime
-)
-
+local function updateFPS(deltaTime)
 	if State.Destroyed then
 		return
 	end
 
-	if typeof(deltaTime)
-		~= "number" then
-
+	if typeof(deltaTime) ~= "number" then
 		return
 	end
 
@@ -1864,9 +1649,9 @@ local function updateFPS(
 			1
 		)
 
-	if State.FPSTimer
-		< CONFIG.FPSSampleRate then
-
+	if State.FPSTimer <
+		CONFIG.FPSSampleRate
+	then
 		return
 	end
 
@@ -1884,32 +1669,17 @@ local function updateFPS(
 	State.FPSTimer = 0
 end
 
-local function getFPSColor(
-	fps
-)
-
+local function getFPSColor(fps)
 	if fps >= 55 then
-
 		return CONFIG.GoodColor
-
 	elseif fps >= 30 then
-
 		return CONFIG.WarningColor
-
 	else
-
 		return CONFIG.BadColor
 	end
 end
 
---//==================================================
---// UI DATA UPDATE
---//==================================================
-
-local function updatePingUI(
-	ping
-)
-
+local function updatePingUI(ping)
 	if ping == State.LastPing then
 		return
 	end
@@ -1917,11 +1687,8 @@ local function updatePingUI(
 	State.LastPing = ping
 
 	if ping then
-
 		local color, status =
-			getPingState(
-				ping
-			)
+			getPingState(ping)
 
 		PingValue.Text =
 			string.format(
@@ -1956,9 +1723,7 @@ local function updatePingUI(
 
 		LiveText.TextColor3 =
 			CONFIG.GoodColor
-
 	else
-
 		PingValue.Text =
 			"-- ms"
 
@@ -1989,38 +1754,27 @@ local function updatePingUI(
 end
 
 local function updateFPSUI()
-
 	if State.FPS == State.LastFPS then
 		return
 	end
 
-	State.LastFPS =
-		State.FPS
+	State.LastFPS = State.FPS
 
 	if not State.FPS then
-
-		FPSValue.Text =
-			"--"
-
+		FPSValue.Text = "--"
 		FPSValue.TextColor3 =
 			CONFIG.TextColor
-
 		return
 	end
 
 	FPSValue.Text =
-		tostring(
-			State.FPS
-		)
+		tostring(State.FPS)
 
 	FPSValue.TextColor3 =
-		getFPSColor(
-			State.FPS
-		)
+		getFPSColor(State.FPS)
 end
 
 local function updatePlayers()
-
 	if State.Destroyed then
 		return
 	end
@@ -2031,11 +1785,9 @@ local function updatePlayers()
 	local maxPlayers =
 		Players.MaxPlayers
 
-	if count
-		== State.LastPlayerCount
-		and maxPlayers
-		== State.LastMaxPlayers then
-
+	if count == State.LastPlayerCount
+		and maxPlayers == State.LastMaxPlayers
+	then
 		return
 	end
 
@@ -2054,7 +1806,6 @@ local function updatePlayers()
 end
 
 local function updateDashboard()
-
 	if State.Destroyed then
 		return
 	end
@@ -2063,22 +1814,16 @@ local function updateDashboard()
 		return
 	end
 
-	updatePingUI(
-		getPing()
-	)
-
+	updatePingUI(getPing())
 	updateFPSUI()
 	updatePlayers()
 end
 
---//==================================================
---// BUTTON VISUALS
---//==================================================
+--==============================================================
+-- BUTTON INTERACTION
+--==============================================================
 
-local function getButtonColor(
-	button
-)
-
+local function getButtonColor(button)
 	local state =
 		ButtonStates[button]
 
@@ -2097,10 +1842,7 @@ local function getButtonColor(
 	return CONFIG.ButtonColor
 end
 
-local function getButtonScale(
-	button
-)
-
+local function getButtonScale(button)
 	local state =
 		ButtonStates[button]
 
@@ -2119,17 +1861,14 @@ local function getButtonScale(
 	return 1
 end
 
-local function updateButtonVisual(
-	button
-)
-
+local function updateButtonVisual(button)
 	if State.Destroyed then
 		return
 	end
 
 	if not button
-		or not button.Parent then
-
+		or not button.Parent
+	then
 		return
 	end
 
@@ -2137,9 +1876,7 @@ local function updateButtonVisual(
 		button,
 		{
 			BackgroundColor3 =
-				getButtonColor(
-					button
-				)
+				getButtonColor(button)
 		},
 		CONFIG.FastTweenTime
 	)
@@ -2148,24 +1885,18 @@ local function updateButtonVisual(
 		ButtonScales[button]
 
 	if scale then
-
 		playTween(
 			scale,
 			{
 				Scale =
-					getButtonScale(
-						button
-					)
+					getButtonScale(button)
 			},
 			CONFIG.FastTweenTime
 		)
 	end
 end
 
-local function setupButton(
-	button
-)
-
+local function setupButton(button)
 	if not button then
 		return
 	end
@@ -2178,7 +1909,6 @@ local function setupButton(
 	connect(
 		button.MouseEnter,
 		function()
-
 			local state =
 				ButtonStates[button]
 
@@ -2188,16 +1918,13 @@ local function setupButton(
 
 			state.Hovered = true
 
-			updateButtonVisual(
-				button
-			)
+			updateButtonVisual(button)
 		end
 	)
 
 	connect(
 		button.MouseLeave,
 		function()
-
 			local state =
 				ButtonStates[button]
 
@@ -2207,24 +1934,21 @@ local function setupButton(
 
 			state.Hovered = false
 
-			updateButtonVisual(
-				button
-			)
+			updateButtonVisual(button)
 		end
 	)
 
 	connect(
 		button.InputBegan,
 		function(input)
-
 			local inputType =
 				input.UserInputType
 
 			if inputType
 				~= Enum.UserInputType.MouseButton1
 				and inputType
-				~= Enum.UserInputType.Touch then
-
+				~= Enum.UserInputType.Touch
+			then
 				return
 			end
 
@@ -2237,24 +1961,21 @@ local function setupButton(
 
 			state.Pressed = true
 
-			updateButtonVisual(
-				button
-			)
+			updateButtonVisual(button)
 		end
 	)
 
 	connect(
 		button.InputEnded,
 		function(input)
-
 			local inputType =
 				input.UserInputType
 
 			if inputType
 				~= Enum.UserInputType.MouseButton1
 				and inputType
-				~= Enum.UserInputType.Touch then
-
+				~= Enum.UserInputType.Touch
+			then
 				return
 			end
 
@@ -2267,18 +1988,14 @@ local function setupButton(
 
 			state.Pressed = false
 
-			updateButtonVisual(
-				button
-			)
+			updateButtonVisual(button)
 		end
 	)
 
 	connect(
 		button.Destroying,
 		function()
-
-			ButtonStates[button] =
-				nil
+			ButtonStates[button] = nil
 
 			local scale =
 				ButtonScales[button]
@@ -2287,8 +2004,7 @@ local function setupButton(
 				stopTween(scale)
 			end
 
-			ButtonScales[button] =
-				nil
+			ButtonScales[button] = nil
 
 			stopTween(button)
 		end
@@ -2301,12 +2017,11 @@ setupButton(ReopenButton)
 setupButton(Cancel)
 setupButton(Confirm)
 
---//==================================================
---// RESPONSIVE SYSTEM
---//==================================================
+--==============================================================
+-- VIEWPORT
+--==============================================================
 
 local function getViewportSize()
-
 	if State.Destroyed then
 		return Vector2.zero
 	end
@@ -2321,20 +2036,12 @@ local function getViewportSize()
 	return Vector2.zero
 end
 
-local function getResponsiveScale(
-	width
-)
-
+local function getResponsiveScale(width)
 	if width <= 380 then
-
 		return CONFIG.MobileScale
-
 	elseif width <= 500 then
-
 		return CONFIG.SmallScale
-
 	elseif width <= 800 then
-
 		return CONFIG.TabletScale
 	end
 
@@ -2342,7 +2049,6 @@ local function getResponsiveScale(
 end
 
 local function getRenderedMainSize()
-
 	local scale =
 		UIScale.Scale
 
@@ -2357,58 +2063,39 @@ local function getRenderedMainSize()
 	)
 end
 
---//==================================================
---// CENTER POSITION SYSTEM
---//==================================================
-
-local function getCenterFromPosition(
-	position
-)
-
+local function getCenterFromPosition(position)
 	local viewport =
 		getViewportSize()
 
 	return Vector2.new(
-
-		viewport.X
-			* position.X.Scale
+		viewport.X * position.X.Scale
 			+ position.X.Offset,
 
-		viewport.Y
-			* position.Y.Scale
+		viewport.Y * position.Y.Scale
 			+ position.Y.Offset
 	)
 end
 
-local function positionFromCenter(
-	center
-)
-
+local function positionFromCenter(center)
 	local viewport =
 		getViewportSize()
 
 	return UDim2.new(
+		0.5,
+		center.X - viewport.X * 0.5,
 
 		0.5,
-		center.X
-			- viewport.X * 0.5,
-
-		0.5,
-		center.Y
-			- viewport.Y * 0.5
+		center.Y - viewport.Y * 0.5
 	)
 end
 
-local function clampPosition(
-	position
-)
-
+local function clampPosition(position)
 	local viewport =
 		getViewportSize()
 
 	if viewport.X <= 0
-		or viewport.Y <= 0 then
-
+		or viewport.Y <= 0
+	then
 		return position
 	end
 
@@ -2441,19 +2128,14 @@ local function clampPosition(
 		- halfHeight
 
 	local center =
-		getCenterFromPosition(
-			position
-		)
+		getCenterFromPosition(position)
 
 	local clampedX
 
 	if minX > maxX then
-
 		clampedX =
 			viewport.X * 0.5
-
 	else
-
 		clampedX =
 			math.clamp(
 				center.X,
@@ -2465,12 +2147,9 @@ local function clampPosition(
 	local clampedY
 
 	if minY > maxY then
-
 		clampedY =
 			viewport.Y * 0.5
-
 	else
-
 		clampedY =
 			math.clamp(
 				center.Y,
@@ -2488,7 +2167,6 @@ local function clampPosition(
 end
 
 local function clampCurrentPosition()
-
 	if State.Destroyed then
 		return
 	end
@@ -2506,7 +2184,6 @@ local function clampCurrentPosition()
 end
 
 local function centerDashboard()
-
 	if State.Destroyed then
 		return
 	end
@@ -2515,8 +2192,8 @@ local function centerDashboard()
 		getViewportSize()
 
 	if viewport.X <= 0
-		or viewport.Y <= 0 then
-
+		or viewport.Y <= 0
+	then
 		return
 	end
 
@@ -2533,7 +2210,6 @@ local function centerDashboard()
 end
 
 local function updateScale()
-
 	if State.Destroyed then
 		return
 	end
@@ -2553,17 +2229,17 @@ local function updateScale()
 	if math.abs(
 		UIScale.Scale
 			- targetScale
-	) > 0.001 then
-
+	) > 0.001
+	then
 		UIScale.Scale =
 			targetScale
 	end
 
 	clampCurrentPosition()
+	queueScrollIndicatorUpdate()
 end
 
 local function queueViewportUpdate()
-
 	if State.Destroyed then
 		return
 	end
@@ -2572,28 +2248,22 @@ local function queueViewportUpdate()
 		return
 	end
 
-	State.ViewportUpdateQueued =
-		true
+	State.ViewportUpdateQueued = true
 
-	task.defer(
-		function()
+	task.defer(function()
+		State.ViewportUpdateQueued = false
 
-			State.ViewportUpdateQueued =
-				false
-
-			if State.Destroyed then
-				return
-			end
-
-			updateScale()
+		if State.Destroyed then
+			return
 		end
-	)
+
+		updateScale()
+		updateContentCanvasSize()
+		updateScrollIndicator()
+	end)
 end
 
-local function bindCamera(
-	camera
-)
-
+local function bindCamera(camera)
 	if State.Destroyed then
 		return
 	end
@@ -2604,44 +2274,35 @@ local function bindCamera(
 		camera
 
 	if not camera then
-
 		queueViewportUpdate()
-
 		return
 	end
 
 	CameraViewportConnection =
 		camera:GetPropertyChangedSignal(
 			"ViewportSize"
-		):Connect(
-			function()
-
-				if State.Destroyed then
-					return
-				end
-
-				queueViewportUpdate()
+		):Connect(function()
+			if State.Destroyed then
+				return
 			end
-		)
+
+			queueViewportUpdate()
+		end)
 
 	queueViewportUpdate()
 end
 
---//==================================================
---// DRAG SYSTEM
---//==================================================
+--==============================================================
+-- DRAG
+--==============================================================
 
 local function resetDragState()
-
 	State.Dragging = false
 	State.DragStart = nil
 	State.StartCenter = nil
 end
 
-local function beginDrag(
-	input
-)
-
+local function beginDrag(input)
 	if State.Destroyed then
 		return
 	end
@@ -2660,8 +2321,8 @@ local function beginDrag(
 	if inputType
 		~= Enum.UserInputType.MouseButton1
 		and inputType
-		~= Enum.UserInputType.Touch then
-
+		~= Enum.UserInputType.Touch
+	then
 		return
 	end
 
@@ -2670,27 +2331,22 @@ local function beginDrag(
 	State.DragStart =
 		input.Position
 
-	-- Convert any Scale/Offset position into
-	-- a real viewport-space center before dragging.
 	State.StartCenter =
 		getCenterFromPosition(
 			Main.Position
 		)
 end
 
-local function updateDrag(
-	input
-)
-
+local function updateDrag(input)
 	if State.Destroyed
-		or not State.Dragging then
-
+		or not State.Dragging
+	then
 		return
 	end
 
 	if not State.DragStart
-		or not State.StartCenter then
-
+		or not State.StartCenter
+	then
 		return
 	end
 
@@ -2719,10 +2375,7 @@ local function updateDrag(
 		clamped
 end
 
-local function endDrag(
-	input
-)
-
+local function endDrag(input)
 	if not State.Dragging then
 		return
 	end
@@ -2733,22 +2386,18 @@ local function endDrag(
 	if inputType
 		== Enum.UserInputType.MouseButton1
 		or inputType
-		== Enum.UserInputType.Touch then
-
+		== Enum.UserInputType.Touch
+	then
 		resetDragState()
-
 		clampCurrentPosition()
 	end
 end
 
---//==================================================
---// CONFIRMATION
---//==================================================
+--==============================================================
+-- COLLAPSE
+--==============================================================
 
-local function setConfirmVisible(
-	value
-)
-
+local function setConfirmVisible(value)
 	if State.Destroyed then
 		return
 	end
@@ -2762,7 +2411,6 @@ local function setConfirmVisible(
 	stopTween(ConfirmBox)
 
 	if value then
-
 		ConfirmBox.Size =
 			UDim2.fromOffset(
 				240,
@@ -2788,9 +2436,7 @@ local function setConfirmVisible(
 			Enum.EasingStyle.Back,
 			Enum.EasingDirection.Out
 		)
-
 	else
-
 		ConfirmBox.Size =
 			UDim2.fromOffset(
 				252,
@@ -2799,29 +2445,18 @@ local function setConfirmVisible(
 	end
 end
 
---//==================================================
---// COLLAPSE BODY VISIBILITY
---//==================================================
+local function setDashboardBodyVisible(visible)
+	Content.Visible = visible
+	Footer.Visible = visible
 
-local function setDashboardBodyVisible(
-	visible
-)
-
-	Content.Visible =
-		visible
-
-	Footer.Visible =
-		visible
+	if visible then
+		queueScrollIndicatorUpdate()
+	else
+		ScrollIndicator.Visible = false
+	end
 end
 
---//==================================================
---// COLLAPSE
---//==================================================
-
-local function setCollapsed(
-	value
-)
-
+local function setCollapsed(value)
 	if State.Destroyed then
 		return
 	end
@@ -2830,8 +2465,6 @@ local function setCollapsed(
 		return
 	end
 
-	-- Invalidate all callbacks belonging to
-	-- previous collapse/expand animations.
 	AnimationToken += 1
 
 	local token =
@@ -2840,20 +2473,11 @@ local function setCollapsed(
 	State.Collapsed =
 		value
 
-	-- Always cancel the currently running Main
-	-- animation before starting another one.
 	stopTween(Main)
 
 	if value then
+		Collapse.Text = "+"
 
-		Collapse.Text =
-			"+"
-
-		-- IMPORTANT:
-		-- Hide body BEFORE Main begins shrinking.
-		-- This guarantees that Footer/Card content
-		-- can never visually travel through each
-		-- other during the collapse animation.
 		setDashboardBodyVisible(false)
 
 		local tween =
@@ -2874,10 +2498,7 @@ local function setCollapsed(
 		waitForTween(
 			tween,
 			function()
-
-				if token
-					~= AnimationToken then
-
+				if token ~= AnimationToken then
 					return
 				end
 
@@ -2885,21 +2506,13 @@ local function setCollapsed(
 					return
 				end
 
-				-- Keep body hidden after completion.
 				setDashboardBodyVisible(false)
-
 				clampCurrentPosition()
 			end
 		)
-
 	else
+		Collapse.Text = "—"
 
-		Collapse.Text =
-			"—"
-
-		-- Keep body hidden while Main expands.
-		-- This prevents cards/footer from appearing
-		-- outside their final geometry.
 		setDashboardBodyVisible(false)
 
 		local tween =
@@ -2920,10 +2533,7 @@ local function setCollapsed(
 		waitForTween(
 			tween,
 			function()
-
-				if token
-					~= AnimationToken then
-
+				if token ~= AnimationToken then
 					return
 				end
 
@@ -2935,9 +2545,10 @@ local function setCollapsed(
 					return
 				end
 
-				-- Only reveal the complete layout after
-				-- Main reaches its full calculated height.
 				setDashboardBodyVisible(true)
+
+				updateContentCanvasSize()
+				updateScrollIndicator()
 
 				clampCurrentPosition()
 			end
@@ -2945,67 +2556,52 @@ local function setCollapsed(
 	end
 end
 
---//==================================================
---// DASHBOARD VISIBILITY
---//==================================================
+--==============================================================
+-- SHOW / HIDE
+--==============================================================
 
 local function showDashboard()
-
 	if State.Destroyed then
 		return
 	end
 
-	State.DashboardVisible =
-		true
-
-	State.ConfirmVisible =
-		false
+	State.DashboardVisible = true
+	State.ConfirmVisible = false
 
 	resetDragState()
 
-	ConfirmOverlay.Visible =
-		false
+	ConfirmOverlay.Visible = false
 
-	Main.Visible =
-		true
+	Main.Visible = true
+	ReopenButton.Visible = false
 
-	ReopenButton.Visible =
-		false
-
-	-- Restore deterministic body state.
 	if State.Collapsed then
 		setDashboardBodyVisible(false)
 	else
 		setDashboardBodyVisible(true)
 	end
 
-	clampCurrentPosition()
+	updateContentCanvasSize()
+	updateScrollIndicator()
 
+	clampCurrentPosition()
 	queueViewportUpdate()
 end
 
 local function destroyDashboard()
-
 	if State.Destroyed then
 		return
 	end
 
-	State.Destroyed =
-		true
-
-	State.DashboardVisible =
-		false
-
-	State.ConfirmVisible =
-		false
+	State.Destroyed = true
+	State.DashboardVisible = false
+	State.ConfirmVisible = false
 
 	resetDragState()
 
-	State.CurrentCamera =
-		nil
-
-	State.ViewportUpdateQueued =
-		false
+	State.CurrentCamera = nil
+	State.ViewportUpdateQueued = false
+	State.ScrollUpdateQueued = false
 
 	disconnectCameraViewport()
 	cancelAllTweens()
@@ -3020,47 +2616,37 @@ local function destroyDashboard()
 end
 
 local function hideDashboard()
-
 	if State.Destroyed then
 		return
 	end
 
-	State.DashboardVisible =
-		false
-
-	State.ConfirmVisible =
-		false
+	State.DashboardVisible = false
+	State.ConfirmVisible = false
 
 	resetDragState()
 
-	ConfirmOverlay.Visible =
-		false
+	ConfirmOverlay.Visible = false
+	Main.Visible = false
 
-	Main.Visible =
-		false
+	ScrollIndicator.Visible = false
 
 	if CONFIG.ReopenEnabled then
-
 		ReopenButton.Position =
 			Main.Position
 
-		ReopenButton.Visible =
-			true
-
+		ReopenButton.Visible = true
 	else
-
 		destroyDashboard()
 	end
 end
 
---//==================================================
---// EVENTS
---//==================================================
+--==============================================================
+-- EVENTS
+--==============================================================
 
 connect(
 	Collapse.Activated,
 	function()
-
 		if State.ConfirmVisible then
 			return
 		end
@@ -3074,35 +2660,25 @@ connect(
 connect(
 	Close.Activated,
 	function()
-
 		if State.Destroyed then
 			return
 		end
 
-		setConfirmVisible(
-			true
-		)
+		setConfirmVisible(true)
 	end
 )
 
 connect(
 	Cancel.Activated,
 	function()
-
-		setConfirmVisible(
-			false
-		)
+		setConfirmVisible(false)
 	end
 )
 
 connect(
 	Confirm.Activated,
 	function()
-
-		setConfirmVisible(
-			false
-		)
-
+		setConfirmVisible(false)
 		hideDashboard()
 	end
 )
@@ -3110,7 +2686,6 @@ connect(
 connect(
 	ReopenButton.Activated,
 	function()
-
 		showDashboard()
 	end
 )
@@ -3118,20 +2693,13 @@ connect(
 connect(
 	ConfirmOverlay.Activated,
 	function()
-
 		if not State.ConfirmVisible then
 			return
 		end
 
-		setConfirmVisible(
-			false
-		)
+		setConfirmVisible(false)
 	end
 )
-
---//==================================================
---// DRAG EVENTS
---//==================================================
 
 connect(
 	DragArea.InputBegan,
@@ -3141,10 +2709,9 @@ connect(
 connect(
 	UserInputService.InputChanged,
 	function(input)
-
 		if State.Destroyed
-			or not State.Dragging then
-
+			or not State.Dragging
+		then
 			return
 		end
 
@@ -3154,8 +2721,8 @@ connect(
 		if inputType
 			== Enum.UserInputType.MouseMovement
 			or inputType
-			== Enum.UserInputType.Touch then
-
+			== Enum.UserInputType.Touch
+		then
 			updateDrag(input)
 		end
 	end
@@ -3164,7 +2731,6 @@ connect(
 connect(
 	UserInputService.InputEnded,
 	function(input)
-
 		if State.Destroyed then
 			return
 		end
@@ -3173,16 +2739,11 @@ connect(
 	end
 )
 
---//==================================================
---// CAMERA
---//==================================================
-
 connect(
 	workspace:GetPropertyChangedSignal(
 		"CurrentCamera"
 	),
 	function()
-
 		if State.Destroyed then
 			return
 		end
@@ -3193,14 +2754,9 @@ connect(
 	end
 )
 
---//==================================================
---// PLAYER EVENTS
---//==================================================
-
 connect(
 	Players.PlayerAdded,
 	function()
-
 		if State.Destroyed then
 			return
 		end
@@ -3212,93 +2768,111 @@ connect(
 connect(
 	Players.PlayerRemoving,
 	function()
-
 		if State.Destroyed then
 			return
 		end
 
-		task.defer(
-			function()
-
-				if State.Destroyed then
-					return
-				end
-
-				updatePlayers()
+		task.defer(function()
+			if State.Destroyed then
+				return
 			end
-		)
+
+			updatePlayers()
+		end)
 	end
 )
-
---//==================================================
---// AVATAR REFRESH
---//==================================================
 
 connect(
 	Player.CharacterAppearanceLoaded,
 	function()
-
 		if State.Destroyed then
 			return
 		end
 
-		task.defer(
-			function()
-
-				if State.Destroyed then
-					return
-				end
-
-				local image =
-					getAvatarImage()
-
-				AvatarImage.Image =
-					image
-
-				ReopenAvatar.Image =
-					image
+		task.defer(function()
+			if State.Destroyed then
+				return
 			end
-		)
+
+			local image =
+				getAvatarImage()
+
+			AvatarImage.Image =
+				image
+
+			ReopenAvatar.Image =
+				image
+		end)
 	end
 )
-
---//==================================================
---// FPS
---//==================================================
 
 connect(
 	RunService.PreRender,
 	updateFPS
 )
 
---//==================================================
---// LIFECYCLE
---//==================================================
+--==============================================================
+-- REAL SCROLL EVENTS
+--==============================================================
 
 connect(
-	ScreenGui.Destroying,
+	Content:GetPropertyChangedSignal(
+		"CanvasPosition"
+	),
 	function()
-
 		if State.Destroyed then
 			return
 		end
 
-		State.Destroyed =
-			true
+		-- Direct mathematical synchronization.
+		-- No tween is used here, so the indicator can never
+		-- lead or lag behind the real Content position.
+		updateScrollIndicator()
+	end
+)
 
-		State.DashboardVisible =
-			false
+connect(
+	Content:GetPropertyChangedSignal(
+		"CanvasSize"
+	),
+	function()
+		if State.Destroyed then
+			return
+		end
 
-		State.ConfirmVisible =
-			false
+		updateScrollIndicator()
+	end
+)
+
+connect(
+	Content:GetPropertyChangedSignal(
+		"AbsoluteSize"
+	),
+	function()
+		if State.Destroyed then
+			return
+		end
+
+		queueScrollIndicatorUpdate()
+	end
+)
+
+connect(
+	ScreenGui.Destroying,
+	function()
+		if State.Destroyed then
+			return
+		end
+
+		State.Destroyed = true
+		State.DashboardVisible = false
+		State.ConfirmVisible = false
 
 		resetDragState()
 
-		State.CurrentCamera =
-			nil
-
-		State.ViewportUpdateQueued =
-			false
+		State.CurrentCamera = nil
+		State.ViewportUpdateQueued = false
+		State.ScrollUpdateQueued = false
 
 		disconnectCameraViewport()
 		cancelAllTweens()
@@ -3309,75 +2883,75 @@ connect(
 	end
 )
 
---//==================================================
---// INITIALIZATION
---//==================================================
+--==============================================================
+-- INITIALIZATION
+--==============================================================
 
 bindCamera(
 	workspace.CurrentCamera
 )
 
+updateUsernameDisplay()
+
+updateContentCanvasSize()
+
 updatePlayers()
+
 updateDashboard()
+
 updateScale()
 
--- Guarantee mathematical center on first valid frame.
-task.defer(
-	function()
+updateScrollIndicator()
 
-		if State.Destroyed then
-			return
-		end
+task.defer(function()
+	if State.Destroyed then
+		return
+	end
 
+	if not ScreenGui.Parent then
+		return
+	end
+
+	local viewport =
+		getViewportSize()
+
+	if viewport.X > 0
+		and viewport.Y > 0
+	then
+		centerDashboard()
+		clampCurrentPosition()
+	end
+
+	updateContentCanvasSize()
+	updateScrollIndicator()
+end)
+
+--==============================================================
+-- DASHBOARD UPDATE LOOP
+--==============================================================
+
+task.spawn(function()
+	State.UpdateRunning = true
+
+	while not State.Destroyed do
 		if not ScreenGui.Parent then
-			return
+			break
 		end
 
-		local viewport =
-			getViewportSize()
+		local success =
+			pcall(updateDashboard)
 
-		if viewport.X > 0
-			and viewport.Y > 0 then
-
-			centerDashboard()
-			clampCurrentPosition()
+		if not success then
+			-- Protected intentionally.
+			-- Dashboard monitoring must not terminate
+			-- the entire lifecycle if a transient Roblox
+			-- API error occurs.
 		end
+
+		task.wait(
+			CONFIG.UpdateRate
+		)
 	end
-)
 
---//==================================================
---// LOW-FREQUENCY UPDATE
---//==================================================
-
-task.spawn(
-	function()
-
-		State.UpdateRunning = true
-
-		while not State.Destroyed do
-
-			if not ScreenGui.Parent then
-				break
-			end
-
-			local success =
-				pcall(
-					updateDashboard
-				)
-
-			-- Prevent an unexpected runtime failure
-			-- inside the monitoring update from leaving
-			-- the task in a broken state.
-
-			if not success then
-				-- Intentionally continue on the next cycle.
-			end
-
-			task.wait(
-				CONFIG.UpdateRate
-			)
-		end
-
-		State.UpdateRunning = false
-	end
-)
+	State.UpdateRunning = false
+end)
