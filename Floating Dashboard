@@ -1,10 +1,36 @@
+--[[
+	BOWKAO NETWORK DASHBOARD
+	Production-Ready Roblox Luau Implementation
+
+	Designed for:
+	• Roblox Client / LocalScript
+	• Desktop / Mobile / Tablet
+	• Responsive UI
+	• Safe lifecycle management
+	• Tween conflict prevention
+	• Connection cleanup
+	• Respawn-safe behaviour
+	• Duplicate GUI prevention
+	• Low unnecessary per-frame work
+	• Touch + Mouse interaction
+]]
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 
 local Player = Players.LocalPlayer
+
+if not Player then
+	return
+end
+
 local PlayerGui = Player:WaitForChild("PlayerGui")
+
+--//==================================================
+--// CONFIGURATION
+--//==================================================
 
 local CONFIG = {
 	GuiName = "BowkaoNetworkDashboard",
@@ -67,7 +93,14 @@ local CONFIG = {
 	ScreenPadding = 6,
 
 	ReopenEnabled = true,
+
+	-- Prevents accidental creation of multiple dashboards
+	DestroyExistingGui = true,
 }
+
+--//==================================================
+--// STATE
+--//==================================================
 
 local State = {
 	Destroyed = false,
@@ -79,121 +112,178 @@ local State = {
 	Dragging = false,
 	DragStart = nil,
 	StartPosition = nil,
-	DragInput = nil,
 
 	FPS = nil,
 	FrameCounter = 0,
 	FPSTimer = 0,
 
-	LastPing = nil,
-	LastFPS = nil,
-	LastPlayerCount = nil,
-	LastMaxPlayers = nil,
+	LastPing = false,
+	LastFPS = false,
+	LastPlayerCount = false,
+	LastMaxPlayers = false,
 
 	CurrentCamera = nil,
+
+	ViewportUpdateQueued = false,
 }
 
+--//==================================================
+--// RESOURCE MANAGEMENT
+--//==================================================
+
 local Connections = {}
-local CameraViewportConnection = nil
 local ActiveTweens = {}
-local ButtonPressedState = {}
+local ButtonStates = {}
+
+local CameraViewportConnection = nil
 local AnimationToken = 0
+
+local function isDestroyed()
+	return State.Destroyed
+end
+
+local function addConnection(connection)
+	if not connection then
+		return nil
+	end
+
+	if State.Destroyed then
+		if connection.Connected then
+			connection:Disconnect()
+		end
+
+		return nil
+	end
+
+	table.insert(Connections, connection)
+
+	return connection
+end
 
 local function connect(signal, callback)
 	if State.Destroyed then
 		return nil
 	end
 
-	local connection = signal:Connect(callback)
-	table.insert(Connections, connection)
+	if not signal then
+		return nil
+	end
 
-	return connection
+	return addConnection(signal:Connect(callback))
+end
+
+local function disconnectConnection(connection)
+	if connection and connection.Connected then
+		connection:Disconnect()
+	end
 end
 
 local function disconnectCameraViewport()
 	if CameraViewportConnection then
-		if CameraViewportConnection.Connected then
-			CameraViewportConnection:Disconnect()
-		end
-
+		disconnectConnection(CameraViewportConnection)
 		CameraViewportConnection = nil
 	end
 end
 
 local function disconnectAll()
-	for _, connection in ipairs(Connections) do
-		if connection and connection.Connected then
-			connection:Disconnect()
-		end
-	end
+	for index = #Connections, 1, -1 do
+		local connection = Connections[index]
 
-	table.clear(Connections)
+		if connection then
+			disconnectConnection(connection)
+		end
+
+		Connections[index] = nil
+	end
 end
 
+--//==================================================
+--// TWEEN MANAGEMENT
+--//==================================================
+
 local function stopTween(object)
+	if not object then
+		return
+	end
+
 	local entry = ActiveTweens[object]
 
 	if not entry then
 		return
 	end
 
-	if entry.Connection and entry.Connection.Connected then
-		entry.Connection:Disconnect()
+	if entry.Connection then
+		disconnectConnection(entry.Connection)
+		entry.Connection = nil
 	end
 
 	if entry.Tween then
 		entry.Tween:Cancel()
+		entry.Tween = nil
 	end
 
 	ActiveTweens[object] = nil
 end
 
-local function playTween(object, properties, duration)
+local function playTween(object, properties, duration, easingStyle)
+	if State.Destroyed then
+		return nil
+	end
+
+	if not object or not object.Parent then
+		return nil
+	end
+
 	stopTween(object)
 
-	local tweenObject = TweenService:Create(
+	local tween = TweenService:Create(
 		object,
 		TweenInfo.new(
 			duration or CONFIG.TweenTime,
-			Enum.EasingStyle.Quart,
+			easingStyle or Enum.EasingStyle.Quart,
 			Enum.EasingDirection.Out
 		),
 		properties
 	)
 
 	local entry = {
-		Tween = tweenObject,
+		Tween = tween,
 		Connection = nil,
 	}
 
 	ActiveTweens[object] = entry
 
-	entry.Connection = tweenObject.Completed:Connect(function()
+	entry.Connection = tween.Completed:Connect(function()
 		local current = ActiveTweens[object]
 
-		if current == entry then
-			ActiveTweens[object] = nil
+		if current ~= entry then
+			return
 		end
 
-		if entry.Connection and entry.Connection.Connected then
-			entry.Connection:Disconnect()
+		if entry.Connection then
+			disconnectConnection(entry.Connection)
+			entry.Connection = nil
 		end
+
+		ActiveTweens[object] = nil
 	end)
 
-	tweenObject:Play()
+	tween:Play()
 
-	return tweenObject
+	return tween
 end
 
 local function cancelAllTweens()
 	for object, entry in pairs(ActiveTweens) do
 		if entry then
-			if entry.Connection and entry.Connection.Connected then
-				entry.Connection:Disconnect()
+			if entry.Connection then
+				disconnectConnection(entry.Connection)
+				entry.Connection = nil
 			end
 
 			if entry.Tween then
 				entry.Tween:Cancel()
+				entry.Tween = nil
 			end
 		end
 
@@ -201,30 +291,62 @@ local function cancelAllTweens()
 	end
 end
 
+local function waitForTween(tween, callback)
+	if not tween or State.Destroyed then
+		return
+	end
+
+	local completedConnection
+
+	completedConnection = tween.Completed:Connect(function()
+		if completedConnection then
+			disconnectConnection(completedConnection)
+			completedConnection = nil
+		end
+
+		if State.Destroyed then
+			return
+		end
+
+		callback()
+	end)
+end
+
+--//==================================================
+--// UI HELPERS
+--//==================================================
+
 local function createCorner(parent, radius)
-	local cornerObject = Instance.new("UICorner")
+	local corner = Instance.new("UICorner")
 
-	cornerObject.Name = "Corner"
-	cornerObject.CornerRadius = UDim.new(0, radius)
-	cornerObject.Parent = parent
+	corner.Name = "Corner"
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = parent
 
-	return cornerObject
+	return corner
 end
 
 local function createStroke(parent, transparency)
-	local strokeObject = Instance.new("UIStroke")
+	local stroke = Instance.new("UIStroke")
 
-	strokeObject.Name = "Border"
-	strokeObject.Color = Color3.fromRGB(255, 255, 255)
-	strokeObject.Transparency = transparency
-	strokeObject.Thickness = 1
-	strokeObject.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	strokeObject.Parent = parent
+	stroke.Name = "Border"
+	stroke.Color = Color3.fromRGB(255, 255, 255)
+	stroke.Transparency = transparency
+	stroke.Thickness = 1
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = parent
 
-	return strokeObject
+	return stroke
 end
 
-local function createLabel(parent, name, text, size, position, textSize)
+local function createLabel(
+	parent,
+	name,
+	text,
+	size,
+	position,
+	textSize
+)
 	local label = Instance.new("TextLabel")
 
 	label.Name = name
@@ -247,11 +369,45 @@ local function createLabel(parent, name, text, size, position, textSize)
 	return label
 end
 
-local oldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
+local function createButton(name, text, position, parent, size)
+	local button = Instance.new("TextButton")
 
-if oldGui then
-	oldGui:Destroy()
+	button.Name = name
+	button.Size = size or UDim2.fromOffset(26, 26)
+	button.Position = position
+	button.BackgroundColor3 = CONFIG.ButtonColor
+	button.BackgroundTransparency = CONFIG.ButtonTransparency
+	button.BorderSizePixel = 0
+	button.Text = text
+	button.TextColor3 = CONFIG.TextColor
+	button.TextSize = 14
+	button.Font = Enum.Font.GothamBold
+	button.AutoButtonColor = false
+	button.Active = true
+	button.Selectable = true
+	button.ZIndex = 15
+	button.Parent = parent
+
+	createCorner(button, CONFIG.ButtonRadius)
+
+	return button
 end
+
+--//==================================================
+--// REMOVE OLD INSTANCE
+--//==================================================
+
+if CONFIG.DestroyExistingGui then
+	local oldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
+
+	if oldGui then
+		oldGui:Destroy()
+	end
+end
+
+--//==================================================
+--// SCREEN GUI
+--//==================================================
 
 local ScreenGui = Instance.new("ScreenGui")
 
@@ -263,10 +419,17 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.DisplayOrder = 999999
 ScreenGui.Parent = PlayerGui
 
+--//==================================================
+--// MAIN
+--//==================================================
+
 local Main = Instance.new("Frame")
 
 Main.Name = "Main"
-Main.Size = UDim2.fromOffset(CONFIG.Width, CONFIG.Height)
+Main.Size = UDim2.fromOffset(
+	CONFIG.Width,
+	CONFIG.Height
+)
 Main.Position = CONFIG.Position
 Main.BackgroundColor3 = CONFIG.MainColor
 Main.BackgroundTransparency = CONFIG.MainTransparency
@@ -279,17 +442,33 @@ Main.Parent = ScreenGui
 createCorner(Main, CONFIG.MainRadius)
 createStroke(Main, CONFIG.DividerTransparency)
 
+--//==================================================
+--// RESPONSIVE SCALE
+--//==================================================
+
 local UIScale = Instance.new("UIScale")
 
 UIScale.Name = "ResponsiveScale"
 UIScale.Scale = CONFIG.DesktopScale
 UIScale.Parent = Main
 
+--//==================================================
+--// HEADER
+--//==================================================
+
 local Header = Instance.new("Frame")
 
 Header.Name = "Header"
-Header.Size = UDim2.new(1, -(CONFIG.OuterPadding * 2), 0, CONFIG.HeaderHeight)
-Header.Position = UDim2.fromOffset(CONFIG.OuterPadding, CONFIG.OuterPadding)
+Header.Size = UDim2.new(
+	1,
+	-(CONFIG.OuterPadding * 2),
+	0,
+	CONFIG.HeaderHeight
+)
+Header.Position = UDim2.fromOffset(
+	CONFIG.OuterPadding,
+	CONFIG.OuterPadding
+)
 Header.BackgroundColor3 = CONFIG.DarkPanelColor
 Header.BackgroundTransparency = CONFIG.DarkPanelTransparency
 Header.BorderSizePixel = 0
@@ -297,6 +476,10 @@ Header.ZIndex = 11
 Header.Parent = Main
 
 createCorner(Header, CONFIG.PanelRadius)
+
+--//==================================================
+--// DRAG AREA
+--//==================================================
 
 local DragArea = Instance.new("TextButton")
 
@@ -335,59 +518,60 @@ local Subtitle = createLabel(
 Subtitle.TextColor3 = CONFIG.SecondaryTextColor
 Subtitle.TextTransparency = 0.10
 
-local function createButton(name, text, position)
-	local button = Instance.new("TextButton")
-
-	button.Name = name
-	button.Size = UDim2.fromOffset(26, 26)
-	button.Position = position
-	button.BackgroundColor3 = CONFIG.ButtonColor
-	button.BackgroundTransparency = CONFIG.ButtonTransparency
-	button.BorderSizePixel = 0
-	button.Text = text
-	button.TextColor3 = CONFIG.TextColor
-	button.TextSize = 14
-	button.Font = Enum.Font.GothamBold
-	button.AutoButtonColor = false
-	button.Active = true
-	button.Selectable = true
-	button.ZIndex = 15
-	button.Parent = Header
-
-	createCorner(button, CONFIG.ButtonRadius)
-
-	return button
-end
+--//==================================================
+--// HEADER BUTTONS
+--//==================================================
 
 local Collapse = createButton(
 	"Collapse",
 	"—",
-	UDim2.new(1, -60, 0, 6)
+	UDim2.new(1, -60, 0, 6),
+	Header
 )
 
 local Close = createButton(
 	"Close",
 	"×",
-	UDim2.new(1, -31, 0, 6)
+	UDim2.new(1, -31, 0, 6),
+	Header
 )
 
 Close.TextSize = 16
 
+--//==================================================
+--// CONTENT
+--//==================================================
+
 local Content = Instance.new("Frame")
 
 Content.Name = "Content"
-Content.Size = UDim2.new(1, -(CONFIG.OuterPadding * 2), 1, -50)
-Content.Position = UDim2.fromOffset(CONFIG.OuterPadding, CONFIG.ContentTop)
+Content.Size = UDim2.new(
+	1,
+	-(CONFIG.OuterPadding * 2),
+	1,
+	-50
+)
+Content.Position = UDim2.fromOffset(
+	CONFIG.OuterPadding,
+	CONFIG.ContentTop
+)
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel = 0
 Content.ZIndex = 11
 Content.Parent = Main
 
+--//==================================================
+--// CARDS
+--//==================================================
+
 local function createCard(name, x, y)
 	local card = Instance.new("Frame")
 
 	card.Name = name
-	card.Size = UDim2.fromOffset(CONFIG.CardWidth, CONFIG.CardHeight)
+	card.Size = UDim2.fromOffset(
+		CONFIG.CardWidth,
+		CONFIG.CardHeight
+	)
 	card.Position = UDim2.fromOffset(x, y)
 	card.BackgroundColor3 = CONFIG.PanelColor
 	card.BackgroundTransparency = CONFIG.PanelTransparency
@@ -400,7 +584,12 @@ local function createCard(name, x, y)
 	return card
 end
 
-local function configureCardText(card, titleText, valueText, valueSize)
+local function configureCardText(
+	card,
+	titleText,
+	valueText,
+	valueSize
+)
 	local title = createLabel(
 		card,
 		"Title",
@@ -428,7 +617,11 @@ local function configureCardText(card, titleText, valueText, valueSize)
 	return title, value
 end
 
-local PingCard = createCard("Ping", 0, 0)
+local PingCard = createCard(
+	"Ping",
+	0,
+	0
+)
 
 local _, PingValue = configureCardText(
 	PingCard,
@@ -476,11 +669,23 @@ local _, PlayersValue = configureCardText(
 	13
 )
 
+--//==================================================
+--// STATUS
+--//==================================================
+
 local Status = Instance.new("Frame")
 
 Status.Name = "Status"
-Status.Size = UDim2.new(1, 0, 0, CONFIG.StatusHeight)
-Status.Position = UDim2.fromOffset(0, CONFIG.StatusTop)
+Status.Size = UDim2.new(
+	1,
+	0,
+	0,
+	CONFIG.StatusHeight
+)
+Status.Position = UDim2.fromOffset(
+	0,
+	CONFIG.StatusTop
+)
 Status.BackgroundTransparency = 1
 Status.BorderSizePixel = 0
 Status.ZIndex = 12
@@ -510,226 +715,9 @@ local StatusText = createLabel(
 StatusText.TextColor3 = CONFIG.SecondaryTextColor
 StatusText.ZIndex = 13
 
-local function getPingState(ping)
-	if ping <= 50 then
-		return CONFIG.GoodColor, "EXCELLENT"
-	elseif ping <= 100 then
-		return CONFIG.WarningColor, "GOOD"
-	elseif ping <= 200 then
-		return CONFIG.HighColor, "HIGH"
-	else
-		return CONFIG.BadColor, "VERY HIGH"
-	end
-end
-
-local function getPing()
-	local success, seconds = pcall(function()
-		return Player:GetNetworkPing()
-	end)
-
-	if not success then
-		return nil
-	end
-
-	if typeof(seconds) ~= "number" then
-		return nil
-	end
-
-	if seconds < 0 then
-		return nil
-	end
-
-	return math.floor(seconds * 1000 + 0.5)
-end
-
-local function updateFPS(deltaTime)
-	if State.Destroyed then
-		return
-	end
-
-	State.FrameCounter += 1
-	State.FPSTimer += math.clamp(deltaTime, 0, 1)
-
-	if State.FPSTimer >= CONFIG.FPSSampleRate then
-		State.FPS = math.max(
-			1,
-			math.floor(
-				State.FrameCounter / State.FPSTimer + 0.5
-			)
-		)
-
-		State.FrameCounter = 0
-		State.FPSTimer = 0
-	end
-end
-
-local function getFPSColor(value)
-	if value >= 55 then
-		return CONFIG.GoodColor
-	elseif value >= 30 then
-		return CONFIG.WarningColor
-	else
-		return CONFIG.BadColor
-	end
-end
-
-local function updatePing(ping)
-	if ping == State.LastPing then
-		return
-	end
-
-	State.LastPing = ping
-
-	if ping then
-		local color, status = getPingState(ping)
-
-		PingValue.Text = string.format("%d ms", ping)
-		PingValue.TextColor3 = color
-
-		StatusDot.BackgroundColor3 = color
-
-		StatusText.Text = string.format(
-			"CONNECTED  •  %d ms  •  %s",
-			ping,
-			status
-		)
-
-		StatusText.TextColor3 = color
-
-		ConnectionValue.Text = "CONNECTED"
-		ConnectionValue.TextColor3 = CONFIG.GoodColor
-	else
-		PingValue.Text = "-- ms"
-		PingValue.TextColor3 = CONFIG.TextColor
-
-		StatusDot.BackgroundColor3 = CONFIG.NeutralColor
-
-		StatusText.Text = "NETWORK UNAVAILABLE"
-		StatusText.TextColor3 = CONFIG.SecondaryTextColor
-
-		ConnectionValue.Text = "UNAVAILABLE"
-		ConnectionValue.TextColor3 = CONFIG.NeutralColor
-	end
-end
-
-local function updateFPSUI()
-	if State.FPS == State.LastFPS then
-		return
-	end
-
-	State.LastFPS = State.FPS
-
-	if not State.FPS then
-		FPSValue.Text = "--"
-		FPSValue.TextColor3 = CONFIG.TextColor
-		return
-	end
-
-	FPSValue.Text = tostring(State.FPS)
-	FPSValue.TextColor3 = getFPSColor(State.FPS)
-end
-
-local function updatePlayers()
-	local count = #Players:GetPlayers()
-	local maxPlayers = Players.MaxPlayers
-
-	if count == State.LastPlayerCount
-		and maxPlayers == State.LastMaxPlayers then
-		return
-	end
-
-	State.LastPlayerCount = count
-	State.LastMaxPlayers = maxPlayers
-
-	PlayersValue.Text = string.format(
-		"%d / %d",
-		count,
-		maxPlayers
-	)
-end
-
-local function updateDashboard()
-	if State.Destroyed then
-		return
-	end
-
-	if not ScreenGui.Parent then
-		return
-	end
-
-	updatePing(getPing())
-	updateFPSUI()
-	updatePlayers()
-end
-
-local function setupButton(button)
-	local function setColor(color)
-		if State.Destroyed then
-			return
-		end
-
-		playTween(
-			button,
-			{
-				BackgroundColor3 = color
-			},
-			CONFIG.TweenTime
-		)
-	end
-
-	connect(
-		button.MouseEnter,
-		function()
-			if ButtonPressedState[button] then
-				return
-			end
-
-			setColor(CONFIG.HoverColor)
-		end
-	)
-
-	connect(
-		button.MouseLeave,
-		function()
-			if ButtonPressedState[button] then
-				return
-			end
-
-			setColor(CONFIG.ButtonColor)
-		end
-	)
-
-	connect(
-		button.InputBegan,
-		function(input)
-			local inputType = input.UserInputType
-
-			if inputType == Enum.UserInputType.MouseButton1
-				or inputType == Enum.UserInputType.Touch then
-
-				ButtonPressedState[button] = true
-				setColor(CONFIG.PressedColor)
-			end
-		end
-	)
-
-	connect(
-		button.InputEnded,
-		function(input)
-			local inputType = input.UserInputType
-
-			if inputType == Enum.UserInputType.MouseButton1
-				or inputType == Enum.UserInputType.Touch then
-
-				ButtonPressedState[button] = nil
-				setColor(CONFIG.ButtonColor)
-			end
-		end
-	)
-end
-
-setupButton(Collapse)
-setupButton(Close)
+--//==================================================
+--// REOPEN BUTTON
+--//==================================================
 
 local ReopenButton = Instance.new("TextButton")
 
@@ -753,7 +741,9 @@ ReopenButton.Parent = ScreenGui
 createCorner(ReopenButton, 10)
 createStroke(ReopenButton, 0.80)
 
-setupButton(ReopenButton)
+--//==================================================
+--// CONFIRMATION OVERLAY
+--//==================================================
 
 local ConfirmOverlay = Instance.new("TextButton")
 
@@ -766,6 +756,7 @@ ConfirmOverlay.BorderSizePixel = 0
 ConfirmOverlay.Text = ""
 ConfirmOverlay.AutoButtonColor = false
 ConfirmOverlay.Active = true
+ConfirmOverlay.Selectable = false
 ConfirmOverlay.Visible = false
 ConfirmOverlay.ZIndex = 100
 ConfirmOverlay.Parent = ScreenGui
@@ -809,7 +800,11 @@ local ConfirmDescription = createLabel(
 ConfirmDescription.TextColor3 = CONFIG.SecondaryTextColor
 ConfirmDescription.ZIndex = 102
 
-local function createConfirmButton(name, text, x)
+local function createConfirmButton(
+	name,
+	text,
+	x
+)
 	local button = Instance.new("TextButton")
 
 	button.Name = name
@@ -829,7 +824,6 @@ local function createConfirmButton(name, text, x)
 	button.Parent = ConfirmBox
 
 	createCorner(button, CONFIG.ButtonRadius)
-	setupButton(button)
 
 	return button
 end
@@ -846,28 +840,332 @@ local Confirm = createConfirmButton(
 	128
 )
 
-local function cleanup()
+--//==================================================
+--// NETWORK / PERFORMANCE
+--//==================================================
+
+local function getPingState(ping)
+	if ping <= 50 then
+		return CONFIG.GoodColor, "EXCELLENT"
+	elseif ping <= 100 then
+		return CONFIG.WarningColor, "GOOD"
+	elseif ping <= 200 then
+		return CONFIG.HighColor, "HIGH"
+	else
+		return CONFIG.BadColor, "VERY HIGH"
+	end
+end
+
+local function getPing()
+	if State.Destroyed then
+		return nil
+	end
+
+	local success, seconds = pcall(function()
+		return Player:GetNetworkPing()
+	end)
+
+	if not success then
+		return nil
+	end
+
+	if typeof(seconds) ~= "number" then
+		return nil
+	end
+
+	if seconds < 0 or seconds ~= seconds then
+		return nil
+	end
+
+	return math.floor(
+		seconds * 1000 + 0.5
+	)
+end
+
+local function updateFPS(deltaTime)
 	if State.Destroyed then
 		return
 	end
 
-	State.Destroyed = true
-	State.Dragging = false
-	State.ConfirmVisible = false
-	State.DashboardVisible = false
-	State.DragStart = nil
-	State.StartPosition = nil
-	State.DragInput = nil
-	State.CurrentCamera = nil
+	if typeof(deltaTime) ~= "number" then
+		return
+	end
 
-	disconnectCameraViewport()
-	cancelAllTweens()
-	disconnectAll()
+	State.FrameCounter += 1
+	State.FPSTimer += math.clamp(
+		deltaTime,
+		0,
+		1
+	)
 
-	table.clear(ButtonPressedState)
+	if State.FPSTimer < CONFIG.FPSSampleRate then
+		return
+	end
+
+	State.FPS = math.max(
+		1,
+		math.floor(
+			State.FrameCounter / State.FPSTimer + 0.5
+		)
+	)
+
+	State.FrameCounter = 0
+	State.FPSTimer = 0
 end
 
+local function getFPSColor(fps)
+	if fps >= 55 then
+		return CONFIG.GoodColor
+	elseif fps >= 30 then
+		return CONFIG.WarningColor
+	else
+		return CONFIG.BadColor
+	end
+end
+
+local function updatePingUI(ping)
+	if ping == State.LastPing then
+		return
+	end
+
+	State.LastPing = ping
+
+	if ping then
+		local color, status = getPingState(ping)
+
+		PingValue.Text = string.format(
+			"%d ms",
+			ping
+		)
+
+		PingValue.TextColor3 = color
+
+		StatusDot.BackgroundColor3 = color
+
+		StatusText.Text = string.format(
+			"CONNECTED  •  %d ms  •  %s",
+			ping,
+			status
+		)
+
+		StatusText.TextColor3 = color
+
+		ConnectionValue.Text = "CONNECTED"
+		ConnectionValue.TextColor3 = CONFIG.GoodColor
+	else
+		PingValue.Text = "-- ms"
+		PingValue.TextColor3 = CONFIG.TextColor
+
+		StatusDot.BackgroundColor3 = CONFIG.NeutralColor
+
+		StatusText.Text = "NETWORK UNAVAILABLE"
+		StatusText.TextColor3 = CONFIG.SecondaryTextColor
+
+		ConnectionValue.Text = "UNAVAILABLE"
+		ConnectionValue.TextColor3 = CONFIG.NeutralColor
+	end
+end
+
+local function updateFPSUI()
+	if State.FPS == State.LastFPS then
+		return
+	end
+
+	State.LastFPS = State.FPS
+
+	if not State.FPS then
+		FPSValue.Text = "--"
+		FPSValue.TextColor3 = CONFIG.TextColor
+		return
+	end
+
+	FPSValue.Text = tostring(State.FPS)
+	FPSValue.TextColor3 = getFPSColor(
+		State.FPS
+	)
+end
+
+local function updatePlayers()
+	if State.Destroyed then
+		return
+	end
+
+	local count = #Players:GetPlayers()
+	local maxPlayers = Players.MaxPlayers
+
+	if count == State.LastPlayerCount
+		and maxPlayers == State.LastMaxPlayers then
+		return
+	end
+
+	State.LastPlayerCount = count
+	State.LastMaxPlayers = maxPlayers
+
+	PlayersValue.Text = string.format(
+		"%d / %d",
+		count,
+		maxPlayers
+	)
+end
+
+local function updateDashboard()
+	if State.Destroyed then
+		return
+	end
+
+	if not ScreenGui.Parent then
+		return
+	end
+
+	updatePingUI(getPing())
+	updateFPSUI()
+	updatePlayers()
+end
+
+--//==================================================
+--// BUTTON VISUAL SYSTEM
+--//==================================================
+
+local function getButtonColor(button)
+	local state = ButtonStates[button]
+
+	if not state then
+		return CONFIG.ButtonColor
+	end
+
+	if state.Pressed then
+		return CONFIG.PressedColor
+	end
+
+	if state.Hovered then
+		return CONFIG.HoverColor
+	end
+
+	return CONFIG.ButtonColor
+end
+
+local function updateButtonVisual(button)
+	if State.Destroyed then
+		return
+	end
+
+	if not button or not button.Parent then
+		return
+	end
+
+	playTween(
+		button,
+		{
+			BackgroundColor3 = getButtonColor(button),
+		},
+		CONFIG.TweenTime
+	)
+end
+
+local function setupButton(button)
+	if not button then
+		return
+	end
+
+	ButtonStates[button] = {
+		Hovered = false,
+		Pressed = false,
+	}
+
+	connect(
+		button.MouseEnter,
+		function()
+			local state = ButtonStates[button]
+
+			if not state then
+				return
+			end
+
+			state.Hovered = true
+			updateButtonVisual(button)
+		end
+	)
+
+	connect(
+		button.MouseLeave,
+		function()
+			local state = ButtonStates[button]
+
+			if not state then
+				return
+			end
+
+			state.Hovered = false
+			updateButtonVisual(button)
+		end
+	)
+
+	connect(
+		button.InputBegan,
+		function(input)
+			local inputType = input.UserInputType
+
+			if inputType ~= Enum.UserInputType.MouseButton1
+				and inputType ~= Enum.UserInputType.Touch then
+				return
+			end
+
+			local state = ButtonStates[button]
+
+			if not state then
+				return
+			end
+
+			state.Pressed = true
+			updateButtonVisual(button)
+		end
+	)
+
+	connect(
+		button.InputEnded,
+		function(input)
+			local inputType = input.UserInputType
+
+			if inputType ~= Enum.UserInputType.MouseButton1
+				and inputType ~= Enum.UserInputType.Touch then
+				return
+			end
+
+			local state = ButtonStates[button]
+
+			if not state then
+				return
+			end
+
+			state.Pressed = false
+			updateButtonVisual(button)
+		end
+	)
+
+	connect(
+		button.Destroying,
+		function()
+			ButtonStates[button] = nil
+			stopTween(button)
+		end
+	)
+end
+
+setupButton(Collapse)
+setupButton(Close)
+setupButton(ReopenButton)
+setupButton(Cancel)
+setupButton(Confirm)
+
+--//==================================================
+--// VIEWPORT / RESPONSIVE SYSTEM
+--//==================================================
+
 local function getViewportSize()
+	if State.Destroyed then
+		return Vector2.zero
+	end
+
 	local size = ScreenGui.AbsoluteSize
 
 	if size.X > 0 and size.Y > 0 then
@@ -880,11 +1178,28 @@ local function getViewportSize()
 		return camera.ViewportSize
 	end
 
-	return Vector2.new(0, 0)
+	return Vector2.zero
+end
+
+local function getResponsiveScale(width)
+	if width <= 380 then
+		return CONFIG.MobileScale
+	elseif width <= 500 then
+		return CONFIG.SmallScale
+	elseif width <= 800 then
+		return CONFIG.TabletScale
+	else
+		return CONFIG.DesktopScale
+	end
 end
 
 local function clampPosition(position)
 	local viewport = getViewportSize()
+
+	if viewport.X <= 0 or viewport.Y <= 0 then
+		return position
+	end
+
 	local renderedSize = Main.AbsoluteSize
 	local padding = CONFIG.ScreenPadding
 
@@ -917,11 +1232,107 @@ local function clampCurrentPosition()
 		return
 	end
 
-	Main.Position = clampPosition(Main.Position)
+	local clamped = clampPosition(
+		Main.Position
+	)
+
+	if Main.Position.X.Offset ~= clamped.X.Offset
+		or Main.Position.Y.Offset ~= clamped.Y.Offset then
+		Main.Position = clamped
+	end
 
 	if ReopenButton.Visible then
 		ReopenButton.Position = Main.Position
 	end
+end
+
+local function updateScale()
+	if State.Destroyed then
+		return
+	end
+
+	local viewport = getViewportSize()
+
+	if viewport.X <= 0 then
+		return
+	end
+
+	local targetScale = getResponsiveScale(
+		viewport.X
+	)
+
+	if math.abs(
+		UIScale.Scale - targetScale
+	) > 0.001 then
+		UIScale.Scale = targetScale
+	end
+
+	task.defer(function()
+		if State.Destroyed then
+			return
+		end
+
+		clampCurrentPosition()
+	end)
+end
+
+local function queueViewportUpdate()
+	if State.Destroyed then
+		return
+	end
+
+	if State.ViewportUpdateQueued then
+		return
+	end
+
+	State.ViewportUpdateQueued = true
+
+	task.defer(function()
+		State.ViewportUpdateQueued = false
+
+		if State.Destroyed then
+			return
+		end
+
+		updateScale()
+	end)
+end
+
+local function bindCamera(camera)
+	if State.Destroyed then
+		return
+	end
+
+	disconnectCameraViewport()
+
+	State.CurrentCamera = camera
+
+	if not camera then
+		queueViewportUpdate()
+		return
+	end
+
+	CameraViewportConnection = camera:GetPropertyChangedSignal(
+		"ViewportSize"
+	):Connect(function()
+		if State.Destroyed then
+			return
+		end
+
+		queueViewportUpdate()
+	end)
+
+	queueViewportUpdate()
+end
+
+--//==================================================
+--// DRAG SYSTEM
+--//==================================================
+
+local function resetDragState()
+	State.Dragging = false
+	State.DragStart = nil
+	State.StartPosition = nil
 end
 
 local function beginDrag(input)
@@ -947,19 +1358,19 @@ local function beginDrag(input)
 	State.Dragging = true
 	State.DragStart = input.Position
 	State.StartPosition = Main.Position
-	State.DragInput = nil
 end
 
 local function updateDrag(input)
-	if not State.Dragging then
-		return
-	end
-
 	if State.Destroyed then
 		return
 	end
 
-	if not State.DragStart or not State.StartPosition then
+	if not State.Dragging then
+		return
+	end
+
+	if not State.DragStart
+		or not State.StartPosition then
 		return
 	end
 
@@ -970,7 +1381,9 @@ local function updateDrag(input)
 		State.StartPosition.Y.Offset + delta.Y
 	)
 
-	Main.Position = clampPosition(newPosition)
+	Main.Position = clampPosition(
+		newPosition
+	)
 end
 
 local function endDrag(input)
@@ -983,73 +1396,14 @@ local function endDrag(input)
 	if inputType == Enum.UserInputType.MouseButton1
 		or inputType == Enum.UserInputType.Touch then
 
-		State.Dragging = false
-		State.DragStart = nil
-		State.StartPosition = nil
-		State.DragInput = nil
-
+		resetDragState()
 		clampCurrentPosition()
 	end
 end
 
-local function getResponsiveScale(viewportWidth)
-	if viewportWidth <= 380 then
-		return CONFIG.MobileScale
-	elseif viewportWidth <= 500 then
-		return CONFIG.SmallScale
-	elseif viewportWidth <= 800 then
-		return CONFIG.TabletScale
-	else
-		return CONFIG.DesktopScale
-	end
-end
-
-local function updateScale()
-	if State.Destroyed then
-		return
-	end
-
-	local viewport = getViewportSize()
-
-	if viewport.X <= 0 then
-		return
-	end
-
-	local targetScale = getResponsiveScale(viewport.X)
-
-	if math.abs(UIScale.Scale - targetScale) > 0.001 then
-		UIScale.Scale = targetScale
-	end
-
-	clampCurrentPosition()
-end
-
-local function bindCamera(camera)
-	if State.Destroyed then
-		return
-	end
-
-	disconnectCameraViewport()
-
-	State.CurrentCamera = camera
-
-	if not camera then
-		updateScale()
-		return
-	end
-
-	CameraViewportConnection = camera:GetPropertyChangedSignal(
-		"ViewportSize"
-	):Connect(function()
-		if State.Destroyed then
-			return
-		end
-
-		updateScale()
-	end)
-
-	updateScale()
-end
+--//==================================================
+--// CONFIRMATION
+--//==================================================
 
 local function setConfirmVisible(value)
 	if State.Destroyed then
@@ -1059,13 +1413,17 @@ local function setConfirmVisible(value)
 	State.ConfirmVisible = value
 	ConfirmOverlay.Visible = value
 
-	Main.Interactable = not value
-	ReopenButton.Interactable = not value
-
 	if value then
-		ConfirmBox.Position = UDim2.fromScale(0.5, 0.5)
+		ConfirmBox.Position = UDim2.fromScale(
+			0.5,
+			0.5
+		)
 	end
 end
+
+--//==================================================
+--// COLLAPSE SYSTEM
+--//==================================================
 
 local function setCollapsed(value)
 	if State.Destroyed then
@@ -1079,7 +1437,7 @@ local function setCollapsed(value)
 	State.Collapsed = value
 	AnimationToken += 1
 
-	local currentToken = AnimationToken
+	local token = AnimationToken
 
 	if value then
 		Content.Visible = false
@@ -1091,27 +1449,25 @@ local function setCollapsed(value)
 				Size = UDim2.fromOffset(
 					CONFIG.Width,
 					CONFIG.CollapsedHeight
-				)
+				),
 			},
 			CONFIG.CollapseTweenTime
 		)
 
-		if tween then
-			connect(
-				tween.Completed,
-				function()
-					if State.Destroyed then
-						return
-					end
-
-					if currentToken ~= AnimationToken then
-						return
-					end
-
-					clampCurrentPosition()
+		waitForTween(
+			tween,
+			function()
+				if token ~= AnimationToken then
+					return
 				end
-			)
-		end
+
+				if not State.Collapsed then
+					return
+				end
+
+				clampCurrentPosition()
+			end
+		)
 	else
 		Collapse.Text = "—"
 
@@ -1121,38 +1477,36 @@ local function setCollapsed(value)
 				Size = UDim2.fromOffset(
 					CONFIG.Width,
 					CONFIG.Height
-				)
+				),
 			},
 			CONFIG.CollapseTweenTime
 		)
 
-		if tween then
-			connect(
-				tween.Completed,
-				function()
-					if State.Destroyed then
-						return
-					end
-
-					if currentToken ~= AnimationToken then
-						return
-					end
-
-					if State.Collapsed then
-						return
-					end
-
-					if not ScreenGui.Parent then
-						return
-					end
-
-					Content.Visible = true
-					clampCurrentPosition()
+		waitForTween(
+			tween,
+			function()
+				if token ~= AnimationToken then
+					return
 				end
-			)
-		end
+
+				if State.Collapsed then
+					return
+				end
+
+				if not ScreenGui.Parent then
+					return
+				end
+
+				Content.Visible = true
+				clampCurrentPosition()
+			end
+		)
 	end
 end
+
+--//==================================================
+--// DASHBOARD VISIBILITY
+--//==================================================
 
 local function showDashboard()
 	if State.Destroyed then
@@ -1160,11 +1514,14 @@ local function showDashboard()
 	end
 
 	State.DashboardVisible = true
+	State.ConfirmVisible = false
+
+	ConfirmOverlay.Visible = false
 	Main.Visible = true
 	ReopenButton.Visible = false
 
 	clampCurrentPosition()
-	updateScale()
+	queueViewportUpdate()
 end
 
 local function hideDashboard()
@@ -1173,26 +1530,34 @@ local function hideDashboard()
 	end
 
 	State.DashboardVisible = false
-	State.Dragging = false
-	State.DragStart = nil
-	State.StartPosition = nil
-	State.DragInput = nil
-
-	Main.Visible = false
-	ConfirmOverlay.Visible = false
 	State.ConfirmVisible = false
+
+	resetDragState()
+
+	ConfirmOverlay.Visible = false
+	Main.Visible = false
 
 	if CONFIG.ReopenEnabled then
 		ReopenButton.Position = Main.Position
 		ReopenButton.Visible = true
 	else
-		cleanup()
+		State.Destroyed = true
+
+		disconnectCameraViewport()
+		cancelAllTweens()
+		disconnectAll()
+
+		table.clear(ButtonStates)
 
 		if ScreenGui.Parent then
 			ScreenGui:Destroy()
 		end
 	end
 end
+
+--//==================================================
+--// INPUT / BUTTON EVENTS
+--//==================================================
 
 connect(
 	Collapse.Activated,
@@ -1201,7 +1566,9 @@ connect(
 			return
 		end
 
-		setCollapsed(not State.Collapsed)
+		setCollapsed(
+			not State.Collapsed
+		)
 	end
 )
 
@@ -1239,21 +1606,22 @@ connect(
 )
 
 connect(
-	DragArea.InputBegan,
-	beginDrag
+	ConfirmOverlay.Activated,
+	function()
+		-- Clicking the dimmed background closes the confirmation.
+		-- Clicking the dialog itself does not because the dialog
+		-- is a child GuiObject and receives the input first.
+		if not State.ConfirmVisible then
+			return
+		end
+
+		setConfirmVisible(false)
+	end
 )
 
 connect(
-	DragArea.InputChanged,
-	function(input)
-		local inputType = input.UserInputType
-
-		if inputType == Enum.UserInputType.MouseMovement
-			or inputType == Enum.UserInputType.Touch then
-
-			State.DragInput = input
-		end
-	end
+	DragArea.InputBegan,
+	beginDrag
 )
 
 connect(
@@ -1280,9 +1648,17 @@ connect(
 connect(
 	UserInputService.InputEnded,
 	function(input)
+		if State.Destroyed then
+			return
+		end
+
 		endDrag(input)
 	end
 )
+
+--//==================================================
+--// CAMERA / SCREEN EVENTS
+--//==================================================
 
 connect(
 	workspace:GetPropertyChangedSignal("CurrentCamera"),
@@ -1291,7 +1667,9 @@ connect(
 			return
 		end
 
-		bindCamera(workspace.CurrentCamera)
+		bindCamera(
+			workspace.CurrentCamera
+		)
 	end
 )
 
@@ -1302,13 +1680,21 @@ connect(
 			return
 		end
 
-		updateScale()
+		queueViewportUpdate()
 	end
 )
+
+--//==================================================
+--// PLAYER EVENTS
+--//==================================================
 
 connect(
 	Players.PlayerAdded,
 	function()
+		if State.Destroyed then
+			return
+		end
+
 		updatePlayers()
 	end
 )
@@ -1316,51 +1702,97 @@ connect(
 connect(
 	Players.PlayerRemoving,
 	function()
-		task.defer(updatePlayers)
+		if State.Destroyed then
+			return
+		end
+
+		task.defer(function()
+			if State.Destroyed then
+				return
+			end
+
+			updatePlayers()
+		end)
 	end
 )
+
+--//==================================================
+--// FPS SAMPLING
+--//==================================================
 
 connect(
 	RunService.PreRender,
 	updateFPS
 )
 
-local destroyingConnection = ScreenGui.Destroying:Connect(
+--//==================================================
+--// LIFECYCLE
+--//==================================================
+
+local function cleanup()
+	if State.Destroyed then
+		return
+	end
+
+	State.Destroyed = true
+	State.DashboardVisible = false
+	State.ConfirmVisible = false
+
+	resetDragState()
+
+	State.CurrentCamera = nil
+	State.ViewportUpdateQueued = false
+
+	disconnectCameraViewport()
+	cancelAllTweens()
+	disconnectAll()
+
+	table.clear(ButtonStates)
+end
+
+connect(
+	ScreenGui.Destroying,
 	function()
 		cleanup()
 	end
 )
 
-table.insert(
-	Connections,
-	destroyingConnection
-)
+--//==================================================
+--// INITIALIZATION
+--//==================================================
 
-bindCamera(workspace.CurrentCamera)
-
-task.spawn(
-	function()
-		while not State.Destroyed and ScreenGui.Parent do
-			updateDashboard()
-			task.wait(CONFIG.UpdateRate)
-		end
-	end
+bindCamera(
+	workspace.CurrentCamera
 )
 
 updatePlayers()
 updateDashboard()
 updateScale()
 
-task.defer(
-	function()
-		if State.Destroyed then
-			return
-		end
-
-		if not ScreenGui.Parent then
-			return
-		end
-
-		clampCurrentPosition()
+task.defer(function()
+	if State.Destroyed then
+		return
 	end
-)
+
+	if not ScreenGui.Parent then
+		return
+	end
+
+	clampCurrentPosition()
+end)
+
+--//==================================================
+--// LOW-FREQUENCY DASHBOARD UPDATE LOOP
+--//==================================================
+
+task.spawn(function()
+	while not State.Destroyed do
+		if not ScreenGui.Parent then
+			break
+		end
+
+		updateDashboard()
+
+		task.wait(CONFIG.UpdateRate)
+	end
+end)
