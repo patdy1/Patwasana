@@ -4,22 +4,29 @@
 
 	Roblox Client / LocalScript
 
-	Design:
+	Production Features:
 	• Player Avatar branding
-	• Centered initial placement
-	• Larger readable metrics
-	• Perfectly balanced 2x2 card grid
+	• Exact centered initial placement
+	• Mathematically balanced 2x2 card grid
+	• Derived layout geometry
+	• Zero intentional UI overlap
 	• No vertical accent bars
-	• Proper spacing between cards and footer
+	• Balanced header / content / footer spacing
 	• Responsive desktop / tablet / mobile
 	• Touch + Mouse support
-	• Smooth expand / collapse animation
-	• Smooth micro-interactions
+	• Stable center-based dragging
 	• Safe drag boundaries
+	• Smooth expand / collapse animation
+	• Hardened collapse state transitions
 	• Tween conflict prevention
-	• Connection cleanup
+	• Button micro-interactions
+	• Network / FPS / player monitoring
 	• Respawn-safe
 	• Duplicate GUI prevention
+	• Connection cleanup
+	• Tween cleanup
+	• Task lifecycle protection
+	• Error-safe network sampling
 ]]
 
 --//==================================================
@@ -48,58 +55,92 @@ local CONFIG = {
 	GuiName = "BowkaoNetworkDashboard",
 	DestroyExistingGui = true,
 
-	--// Base size
+	--//==================================================
+	--// BASE SIZE
+	--//==================================================
+
 	Width = 300,
-	Height = 210,
+
+	-- 0 = automatically calculated from layout.
+	-- This prevents footer/card overlap if layout values change.
+	Height = 0,
+
 	CollapsedHeight = 52,
 
-	--// TRUE CENTER
+	-- True mathematical center.
 	Position = UDim2.fromScale(0.5, 0.5),
 
-	--// Update
+	--//==================================================
+	--// UPDATE
+	--//==================================================
+
 	UpdateRate = 0.25,
 	FPSSampleRate = 0.5,
 
-	--// Animation
+	--//==================================================
+	--// ANIMATION
+	--//==================================================
+
 	TweenTime = 0.14,
 	FastTweenTime = 0.10,
 	CollapseTweenTime = 0.20,
 
-	--// Main colors
+	--//==================================================
+	--// MAIN COLORS
+	--//==================================================
+
 	MainColor = Color3.fromRGB(31, 33, 36),
 	HeaderColor = Color3.fromRGB(24, 26, 29),
 	CardColor = Color3.fromRGB(40, 43, 47),
 	FooterColor = Color3.fromRGB(25, 27, 30),
 
-	--// Buttons
+	--//==================================================
+	--// BUTTON COLORS
+	--//==================================================
+
 	ButtonColor = Color3.fromRGB(48, 51, 55),
 	ButtonHoverColor = Color3.fromRGB(61, 64, 69),
 	ButtonPressedColor = Color3.fromRGB(76, 79, 84),
 
-	--// Text
+	--//==================================================
+	--// TEXT
+	--//==================================================
+
 	TextColor = Color3.fromRGB(245, 246, 248),
 	SecondaryTextColor = Color3.fromRGB(157, 161, 168),
 	MutedTextColor = Color3.fromRGB(112, 116, 123),
 
-	--// Status
+	--//==================================================
+	--// STATUS
+	--//==================================================
+
 	GoodColor = Color3.fromRGB(100, 255, 130),
 	WarningColor = Color3.fromRGB(255, 220, 80),
 	HighColor = Color3.fromRGB(255, 155, 70),
 	BadColor = Color3.fromRGB(255, 80, 80),
 	NeutralColor = Color3.fromRGB(160, 164, 171),
 
-	--// Transparency
+	--//==================================================
+	--// TRANSPARENCY
+	--//==================================================
+
 	MainTransparency = 0.04,
 	HeaderTransparency = 0.02,
 	CardTransparency = 0.04,
 	FooterTransparency = 0.02,
 
-	--// Borders
+	--//==================================================
+	--// BORDERS
+	--//==================================================
+
 	MainStrokeTransparency = 0.78,
 	CardStrokeTransparency = 0.90,
 	ButtonStrokeTransparency = 0.88,
 
-	--// Radius
+	--//==================================================
+	--// RADIUS
+	--//==================================================
+
 	MainRadius = 11,
 	HeaderRadius = 9,
 	CardRadius = 8,
@@ -107,33 +148,32 @@ local CONFIG = {
 	DialogRadius = 11,
 	AvatarRadius = 9,
 
-	--// Layout
+	--//==================================================
+	--// LAYOUT
+	--//==================================================
+
 	OuterPadding = 8,
 
 	HeaderHeight = 44,
 
-	-- IMPORTANT:
-	-- Main inner width = 300 - 16 = 284
-	-- 138 + 8 + 138 = 284
-	CardWidth = 138,
-	CardHeight = 54,
+	-- Uniform vertical rhythm.
+	-- Header -> Content = 8
+	HeaderContentGap = 8,
+
+	-- Card geometry.
+	-- CardWidth is derived automatically.
+	CardHeight = 57,
 	CardGap = 8,
 
-	ContentTop = 56,
-
-	-- Cards:
-	-- Row 1: 56 -> 110
-	-- Gap: 8
-	-- Row 2: 118 -> 172
-	--
-	-- Footer:
-	-- Top: 180
-	-- Gap from cards: 8
+	-- Content -> Footer.
 	ContentBottomGap = 8,
 
-	FooterHeight = 22,
+	FooterHeight = 24,
 
-	--// Responsive
+	--//==================================================
+	--// RESPONSIVE
+	--//==================================================
+
 	MobileScale = 0.84,
 	SmallScale = 0.90,
 	TabletScale = 0.96,
@@ -143,6 +183,57 @@ local CONFIG = {
 
 	ReopenEnabled = true,
 }
+
+--//==================================================
+--// DERIVED LAYOUT
+--//==================================================
+
+local LAYOUT = {}
+
+-- Available inner width.
+LAYOUT.ContentWidth =
+	CONFIG.Width
+	- (CONFIG.OuterPadding * 2)
+
+-- Exact 2-column width.
+LAYOUT.CardWidth =
+	(LAYOUT.ContentWidth - CONFIG.CardGap) / 2
+
+-- Two cards + center gap.
+LAYOUT.ContentHeight =
+	(CONFIG.CardHeight * 2)
+	+ CONFIG.CardGap
+
+-- Header:
+-- top padding
+-- header
+-- gap
+-- content
+-- gap
+-- footer
+-- bottom padding
+LAYOUT.ContentTop =
+	CONFIG.OuterPadding
+	+ CONFIG.HeaderHeight
+	+ CONFIG.HeaderContentGap
+
+LAYOUT.FooterTop =
+	LAYOUT.ContentTop
+	+ LAYOUT.ContentHeight
+	+ CONFIG.ContentBottomGap
+
+LAYOUT.CalculatedHeight =
+	LAYOUT.FooterTop
+	+ CONFIG.FooterHeight
+	+ CONFIG.OuterPadding
+
+-- Allow manual height only if it is larger than
+-- the mathematically required height.
+LAYOUT.ExpandedHeight =
+	math.max(
+		CONFIG.Height,
+		LAYOUT.CalculatedHeight
+	)
 
 --//==================================================
 --// STATE
@@ -158,7 +249,7 @@ local State = {
 
 	Dragging = false,
 	DragStart = nil,
-	StartPosition = nil,
+	StartCenter = nil,
 
 	FPS = nil,
 	FrameCounter = 0,
@@ -171,6 +262,8 @@ local State = {
 
 	CurrentCamera = nil,
 	ViewportUpdateQueued = false,
+
+	UpdateRunning = false,
 }
 
 --//==================================================
@@ -179,6 +272,7 @@ local State = {
 
 local Connections = {}
 local ActiveTweens = {}
+
 local ButtonStates = {}
 local ButtonScales = {}
 
@@ -302,25 +396,46 @@ local function playTween(
 
 	stopTween(object)
 
-	local tween = TweenService:Create(
+	local tween
 
-		object,
+	local success, result =
+		pcall(
+			function()
 
-		TweenInfo.new(
-			duration or CONFIG.TweenTime,
-			easingStyle or Enum.EasingStyle.Quart,
-			easingDirection or Enum.EasingDirection.Out
-		),
+				return TweenService:Create(
 
-		properties
-	)
+					object,
+
+					TweenInfo.new(
+						duration or CONFIG.TweenTime,
+						easingStyle or Enum.EasingStyle.Quart,
+						easingDirection
+							or Enum.EasingDirection.Out
+					),
+
+					properties
+				)
+
+			end
+		)
+
+	if not success then
+		return nil
+	end
+
+	tween = result
+
+	if not tween then
+		return nil
+	end
 
 	local entry = {
 		Tween = tween,
 		Connection = nil,
 	}
 
-	ActiveTweens[object] = entry
+	ActiveTweens[object] =
+		entry
 
 	entry.Connection =
 		tween.Completed:Connect(
@@ -385,7 +500,9 @@ local function waitForTween(
 					return
 				end
 
-				callback()
+				if callback then
+					callback()
+				end
 			end
 		)
 end
@@ -496,6 +613,7 @@ local function createLabel(
 	label.BorderSizePixel = 0
 
 	label.Text = text
+
 	label.TextColor3 =
 		CONFIG.TextColor
 
@@ -647,11 +765,9 @@ Main.Name = "Main"
 Main.Size =
 	UDim2.fromOffset(
 		CONFIG.Width,
-		CONFIG.Height
+		LAYOUT.ExpandedHeight
 	)
 
--- IMPORTANT:
--- Real screen center
 Main.AnchorPoint =
 	Vector2.new(
 		0.5,
@@ -766,6 +882,8 @@ AvatarFrame.BackgroundColor3 =
 
 AvatarFrame.BorderSizePixel = 0
 
+AvatarFrame.ClipsDescendants = true
+
 AvatarFrame.ZIndex = 13
 AvatarFrame.Parent = Header
 
@@ -811,11 +929,41 @@ createCorner(
 	CONFIG.AvatarRadius
 )
 
-AvatarImage.Image =
-	string.format(
+local function getAvatarImage()
+
+	local success, image =
+		pcall(
+			function()
+
+				local content =
+					Players:GetUserThumbnailAsync(
+
+						Player.UserId,
+
+						Enum.ThumbnailType.HeadShot,
+
+						Enum.ThumbnailSize.Size420x420
+					)
+
+				return content
+			end
+		)
+
+	if success
+		and typeof(image) == "string"
+		and image ~= "" then
+
+		return image
+	end
+
+	return string.format(
 		"rbxthumb://type=AvatarHeadShot&id=%d&w=420&h=420",
 		Player.UserId
 	)
+end
+
+AvatarImage.Image =
+	getAvatarImage()
 
 --//==================================================
 --// DRAG AREA
@@ -827,10 +975,13 @@ local DragArea =
 DragArea.Name =
 	"DragArea"
 
+-- Header width = 284.
+-- Avatar/title region ends before LIVE.
+-- LIVE + buttons have their own safe area.
 DragArea.Size =
 	UDim2.new(
 		1,
-		-102,
+		-138,
 		1,
 		0
 	)
@@ -916,10 +1067,8 @@ LiveDot.Size =
 	)
 
 LiveDot.Position =
-	UDim2.new(
-		1,
-		-72,
-		0,
+	UDim2.fromOffset(
+		190,
 		19
 	)
 
@@ -942,13 +1091,11 @@ local LiveText =
 		"LiveText",
 		"LIVE",
 		UDim2.fromOffset(
-			28,
+			26,
 			14
 		),
-		UDim2.new(
-			1,
-			-64,
-			0,
+		UDim2.fromOffset(
+			200,
 			14
 		),
 		8
@@ -958,7 +1105,7 @@ LiveText.TextColor3 =
 	CONFIG.GoodColor
 
 LiveText.TextXAlignment =
-	Enum.TextXAlignment.Right
+	Enum.TextXAlignment.Left
 
 LiveText.Font =
 	Enum.Font.GothamBold
@@ -973,10 +1120,8 @@ local Collapse =
 	createButton(
 		"Collapse",
 		"—",
-		UDim2.new(
-			1,
-			-57,
-			0,
+		UDim2.fromOffset(
+			227,
 			8
 		),
 		Header,
@@ -990,10 +1135,8 @@ local Close =
 	createButton(
 		"Close",
 		"×",
-		UDim2.new(
-			1,
-			-31,
-			0,
+		UDim2.fromOffset(
+			253,
 			8
 		),
 		Header,
@@ -1020,14 +1163,13 @@ Content.Size =
 		1,
 		-(CONFIG.OuterPadding * 2),
 		0,
-		(CONFIG.CardHeight * 2)
-			+ CONFIG.CardGap
+		LAYOUT.ContentHeight
 	)
 
 Content.Position =
 	UDim2.fromOffset(
 		CONFIG.OuterPadding,
-		CONFIG.ContentTop
+		LAYOUT.ContentTop
 	)
 
 Content.BackgroundTransparency = 1
@@ -1053,7 +1195,7 @@ local function createCard(
 
 	card.Size =
 		UDim2.fromOffset(
-			CONFIG.CardWidth,
+			LAYOUT.CardWidth,
 			CONFIG.CardHeight
 		)
 
@@ -1129,11 +1271,11 @@ local function configureCardText(
 				1,
 				-20,
 				0,
-				29
+				28
 			),
 			UDim2.fromOffset(
 				10,
-				21
+				22
 			),
 			valueSize
 		)
@@ -1168,7 +1310,7 @@ local _, PingValue =
 local FPSCard =
 	createCard(
 		"FPS",
-		CONFIG.CardWidth
+		LAYOUT.CardWidth
 			+ CONFIG.CardGap,
 		0
 	)
@@ -1200,7 +1342,7 @@ local _, ConnectionValue =
 local PlayersCard =
 	createCard(
 		"Players",
-		CONFIG.CardWidth
+		LAYOUT.CardWidth
 			+ CONFIG.CardGap,
 		CONFIG.CardHeight
 			+ CONFIG.CardGap
@@ -1232,16 +1374,10 @@ Footer.Size =
 		CONFIG.FooterHeight
 	)
 
--- Footer is deliberately separated from the card grid.
--- This prevents NETWORK / PLAYERS from touching CONNECTED.
-
 Footer.Position =
-	UDim2.new(
-		0,
+	UDim2.fromOffset(
 		CONFIG.OuterPadding,
-		1,
-		-(CONFIG.OuterPadding
-			+ CONFIG.FooterHeight)
+		LAYOUT.FooterTop
 	)
 
 Footer.BackgroundColor3 =
@@ -1280,7 +1416,7 @@ StatusDot.Size =
 StatusDot.Position =
 	UDim2.fromOffset(
 		9,
-		8
+		9
 	)
 
 StatusDot.BackgroundColor3 =
@@ -1311,7 +1447,7 @@ local StatusText =
 			20,
 			0
 		),
-		8
+		9
 	)
 
 StatusText.TextColor3 =
@@ -1360,6 +1496,7 @@ ReopenButton.AutoButtonColor = false
 
 ReopenButton.Active = true
 ReopenButton.Selectable = true
+ReopenButton.ClipsDescendants = true
 
 ReopenButton.Visible = false
 
@@ -1461,8 +1598,7 @@ ConfirmOverlay.Selectable = false
 ConfirmOverlay.Visible = false
 
 ConfirmOverlay.ZIndex = 100
-ConfirmOverlay.Parent =
-	ScreenGui
+ConfirmOverlay.Parent = ScreenGui
 
 --//==================================================
 --// CONFIRM BOX
@@ -1673,7 +1809,9 @@ local function getPing()
 	local success, seconds =
 		pcall(
 			function()
+
 				return Player:GetNetworkPing()
+
 			end
 		)
 
@@ -2211,7 +2349,7 @@ local function getRenderedMainSize()
 	local height =
 		State.Collapsed
 		and CONFIG.CollapsedHeight
-		or CONFIG.Height
+		or LAYOUT.ExpandedHeight
 
 	return Vector2.new(
 		CONFIG.Width * scale,
@@ -2220,7 +2358,7 @@ local function getRenderedMainSize()
 end
 
 --//==================================================
---// CENTER-BASED POSITION SYSTEM
+--// CENTER POSITION SYSTEM
 --//==================================================
 
 local function getCenterFromPosition(
@@ -2291,41 +2429,55 @@ local function clampPosition(
 
 	local maxX =
 		viewport.X
-			- padding
-			- halfWidth
+		- padding
+		- halfWidth
 
 	local minY =
 		padding + halfHeight
 
 	local maxY =
 		viewport.Y
-			- padding
-			- halfHeight
+		- padding
+		- halfHeight
 
 	local center =
 		getCenterFromPosition(
 			position
 		)
 
-	local clampedX =
-		math.clamp(
-			center.X,
-			minX,
-			math.max(
+	local clampedX
+
+	if minX > maxX then
+
+		clampedX =
+			viewport.X * 0.5
+
+	else
+
+		clampedX =
+			math.clamp(
+				center.X,
 				minX,
 				maxX
 			)
-		)
+	end
 
-	local clampedY =
-		math.clamp(
-			center.Y,
-			minY,
-			math.max(
+	local clampedY
+
+	if minY > maxY then
+
+		clampedY =
+			viewport.Y * 0.5
+
+	else
+
+		clampedY =
+			math.clamp(
+				center.Y,
 				minY,
 				maxY
 			)
-		)
+	end
 
 	return positionFromCenter(
 		Vector2.new(
@@ -2349,11 +2501,35 @@ local function clampCurrentPosition()
 	Main.Position =
 		clamped
 
-	if ReopenButton.Visible then
+	ReopenButton.Position =
+		clamped
+end
 
-		ReopenButton.Position =
-			clamped
+local function centerDashboard()
+
+	if State.Destroyed then
+		return
 	end
+
+	local viewport =
+		getViewportSize()
+
+	if viewport.X <= 0
+		or viewport.Y <= 0 then
+
+		return
+	end
+
+	Main.Position =
+		positionFromCenter(
+			Vector2.new(
+				viewport.X * 0.5,
+				viewport.Y * 0.5
+			)
+		)
+
+	ReopenButton.Position =
+		Main.Position
 end
 
 local function updateScale()
@@ -2459,7 +2635,7 @@ local function resetDragState()
 
 	State.Dragging = false
 	State.DragStart = nil
-	State.StartPosition = nil
+	State.StartCenter = nil
 end
 
 local function beginDrag(
@@ -2494,8 +2670,12 @@ local function beginDrag(
 	State.DragStart =
 		input.Position
 
-	State.StartPosition =
-		Main.Position
+	-- Convert any Scale/Offset position into
+	-- a real viewport-space center before dragging.
+	State.StartCenter =
+		getCenterFromPosition(
+			Main.Position
+		)
 end
 
 local function updateDrag(
@@ -2509,7 +2689,7 @@ local function updateDrag(
 	end
 
 	if not State.DragStart
-		or not State.StartPosition then
+		or not State.StartCenter then
 
 		return
 	end
@@ -2518,28 +2698,25 @@ local function updateDrag(
 		input.Position
 		- State.DragStart
 
+	local newCenter =
+		State.StartCenter
+		+ delta
+
 	local newPosition =
-		UDim2.new(
-
-			0.5,
-			State.StartPosition.X.Offset
-				+ delta.X,
-
-			0.5,
-			State.StartPosition.Y.Offset
-				+ delta.Y
+		positionFromCenter(
+			newCenter
 		)
 
-	Main.Position =
+	local clamped =
 		clampPosition(
 			newPosition
 		)
 
-	if ReopenButton.Visible then
+	Main.Position =
+		clamped
 
-		ReopenButton.Position =
-			Main.Position
-	end
+	ReopenButton.Position =
+		clamped
 end
 
 local function endDrag(
@@ -2582,6 +2759,8 @@ local function setConfirmVisible(
 	ConfirmOverlay.Visible =
 		value
 
+	stopTween(ConfirmBox)
+
 	if value then
 
 		ConfirmBox.Size =
@@ -2606,15 +2785,33 @@ local function setConfirmVisible(
 					)
 			},
 			CONFIG.TweenTime,
-			Enum.EasingStyle.Back
+			Enum.EasingStyle.Back,
+			Enum.EasingDirection.Out
 		)
 
 	else
 
-		stopTween(
-			ConfirmBox
-		)
+		ConfirmBox.Size =
+			UDim2.fromOffset(
+				252,
+				122
+			)
 	end
+end
+
+--//==================================================
+--// COLLAPSE BODY VISIBILITY
+--//==================================================
+
+local function setDashboardBodyVisible(
+	visible
+)
+
+	Content.Visible =
+		visible
+
+	Footer.Visible =
+		visible
 end
 
 --//==================================================
@@ -2633,24 +2830,31 @@ local function setCollapsed(
 		return
 	end
 
-	State.Collapsed =
-		value
-
+	-- Invalidate all callbacks belonging to
+	-- previous collapse/expand animations.
 	AnimationToken += 1
 
 	local token =
 		AnimationToken
 
+	State.Collapsed =
+		value
+
+	-- Always cancel the currently running Main
+	-- animation before starting another one.
+	stopTween(Main)
+
 	if value then
 
-		Collapse.Text = "+"
+		Collapse.Text =
+			"+"
 
-		-- Keep them visible while shrinking.
-		-- Main.ClipsDescendants will naturally hide
-		-- content as the window gets smaller.
-
-		Content.Visible = true
-		Footer.Visible = true
+		-- IMPORTANT:
+		-- Hide body BEFORE Main begins shrinking.
+		-- This guarantees that Footer/Card content
+		-- can never visually travel through each
+		-- other during the collapse animation.
+		setDashboardBodyVisible(false)
 
 		local tween =
 			playTween(
@@ -2672,14 +2876,17 @@ local function setCollapsed(
 			function()
 
 				if token
-					~= AnimationToken
-					or not State.Collapsed then
+					~= AnimationToken then
 
 					return
 				end
 
-				Content.Visible = false
-				Footer.Visible = false
+				if not State.Collapsed then
+					return
+				end
+
+				-- Keep body hidden after completion.
+				setDashboardBodyVisible(false)
 
 				clampCurrentPosition()
 			end
@@ -2687,13 +2894,13 @@ local function setCollapsed(
 
 	else
 
-		Collapse.Text = "—"
+		Collapse.Text =
+			"—"
 
-		-- Show content BEFORE expanding so the
-		-- dashboard grows naturally with its contents.
-
-		Content.Visible = true
-		Footer.Visible = true
+		-- Keep body hidden while Main expands.
+		-- This prevents cards/footer from appearing
+		-- outside their final geometry.
+		setDashboardBodyVisible(false)
 
 		local tween =
 			playTween(
@@ -2702,7 +2909,7 @@ local function setCollapsed(
 					Size =
 						UDim2.fromOffset(
 							CONFIG.Width,
-							CONFIG.Height
+							LAYOUT.ExpandedHeight
 						)
 				},
 				CONFIG.CollapseTweenTime,
@@ -2715,15 +2922,22 @@ local function setCollapsed(
 			function()
 
 				if token
-					~= AnimationToken
-					or State.Collapsed then
+					~= AnimationToken then
 
+					return
+				end
+
+				if State.Collapsed then
 					return
 				end
 
 				if not ScreenGui.Parent then
 					return
 				end
+
+				-- Only reveal the complete layout after
+				-- Main reaches its full calculated height.
+				setDashboardBodyVisible(true)
 
 				clampCurrentPosition()
 			end
@@ -2747,6 +2961,8 @@ local function showDashboard()
 	State.ConfirmVisible =
 		false
 
+	resetDragState()
+
 	ConfirmOverlay.Visible =
 		false
 
@@ -2756,9 +2972,51 @@ local function showDashboard()
 	ReopenButton.Visible =
 		false
 
+	-- Restore deterministic body state.
+	if State.Collapsed then
+		setDashboardBodyVisible(false)
+	else
+		setDashboardBodyVisible(true)
+	end
+
 	clampCurrentPosition()
 
 	queueViewportUpdate()
+end
+
+local function destroyDashboard()
+
+	if State.Destroyed then
+		return
+	end
+
+	State.Destroyed =
+		true
+
+	State.DashboardVisible =
+		false
+
+	State.ConfirmVisible =
+		false
+
+	resetDragState()
+
+	State.CurrentCamera =
+		nil
+
+	State.ViewportUpdateQueued =
+		false
+
+	disconnectCameraViewport()
+	cancelAllTweens()
+	disconnectAll()
+
+	table.clear(ButtonStates)
+	table.clear(ButtonScales)
+
+	if ScreenGui.Parent then
+		ScreenGui:Destroy()
+	end
 end
 
 local function hideDashboard()
@@ -2791,19 +3049,7 @@ local function hideDashboard()
 
 	else
 
-		State.Destroyed =
-			true
-
-		disconnectCameraViewport()
-		cancelAllTweens()
-		disconnectAll()
-
-		table.clear(ButtonStates)
-		table.clear(ButtonScales)
-
-		if ScreenGui.Parent then
-			ScreenGui:Destroy()
-		end
+		destroyDashboard()
 	end
 end
 
@@ -2985,6 +3231,38 @@ connect(
 )
 
 --//==================================================
+--// AVATAR REFRESH
+--//==================================================
+
+connect(
+	Player.CharacterAppearanceLoaded,
+	function()
+
+		if State.Destroyed then
+			return
+		end
+
+		task.defer(
+			function()
+
+				if State.Destroyed then
+					return
+				end
+
+				local image =
+					getAvatarImage()
+
+				AvatarImage.Image =
+					image
+
+				ReopenAvatar.Image =
+					image
+			end
+		)
+	end
+)
+
+--//==================================================
 --// FPS
 --//==================================================
 
@@ -2997,41 +3275,37 @@ connect(
 --// LIFECYCLE
 --//==================================================
 
-local function cleanup()
-
-	if State.Destroyed then
-		return
-	end
-
-	State.Destroyed = true
-
-	State.DashboardVisible =
-		false
-
-	State.ConfirmVisible =
-		false
-
-	resetDragState()
-
-	State.CurrentCamera =
-		nil
-
-	State.ViewportUpdateQueued =
-		false
-
-	disconnectCameraViewport()
-	cancelAllTweens()
-	disconnectAll()
-
-	table.clear(ButtonStates)
-	table.clear(ButtonScales)
-end
-
 connect(
 	ScreenGui.Destroying,
 	function()
 
-		cleanup()
+		if State.Destroyed then
+			return
+		end
+
+		State.Destroyed =
+			true
+
+		State.DashboardVisible =
+			false
+
+		State.ConfirmVisible =
+			false
+
+		resetDragState()
+
+		State.CurrentCamera =
+			nil
+
+		State.ViewportUpdateQueued =
+			false
+
+		disconnectCameraViewport()
+		cancelAllTweens()
+		disconnectAll()
+
+		table.clear(ButtonStates)
+		table.clear(ButtonScales)
 	end
 )
 
@@ -3047,10 +3321,7 @@ updatePlayers()
 updateDashboard()
 updateScale()
 
--- Force exact center on first render.
--- This intentionally overrides any stale/invalid
--- position and guarantees true screen centering.
-
+-- Guarantee mathematical center on first valid frame.
 task.defer(
 	function()
 
@@ -3068,12 +3339,7 @@ task.defer(
 		if viewport.X > 0
 			and viewport.Y > 0 then
 
-			Main.Position =
-				UDim2.fromScale(
-					0.5,
-					0.5
-				)
-
+			centerDashboard()
 			clampCurrentPosition()
 		end
 	end
@@ -3086,17 +3352,32 @@ task.defer(
 task.spawn(
 	function()
 
+		State.UpdateRunning = true
+
 		while not State.Destroyed do
 
 			if not ScreenGui.Parent then
 				break
 			end
 
-			updateDashboard()
+			local success =
+				pcall(
+					updateDashboard
+				)
+
+			-- Prevent an unexpected runtime failure
+			-- inside the monitoring update from leaving
+			-- the task in a broken state.
+
+			if not success then
+				-- Intentionally continue on the next cycle.
+			end
 
 			task.wait(
 				CONFIG.UpdateRate
 			)
 		end
+
+		State.UpdateRunning = false
 	end
 )
