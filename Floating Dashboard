@@ -6,12 +6,14 @@
 
 	Design:
 	• Player Avatar branding
+	• Centered initial placement
 	• Larger readable metrics
-	• Clean card layout
+	• Perfectly balanced 2x2 card grid
 	• No vertical accent bars
-	• Balanced content / footer spacing
-	• Desktop / Tablet / Mobile responsive
+	• Proper spacing between cards and footer
+	• Responsive desktop / tablet / mobile
 	• Touch + Mouse support
+	• Smooth expand / collapse animation
 	• Smooth micro-interactions
 	• Safe drag boundaries
 	• Tween conflict prevention
@@ -48,10 +50,11 @@ local CONFIG = {
 
 	--// Base size
 	Width = 300,
-	Height = 202,
+	Height = 210,
 	CollapsedHeight = 52,
 
-	Position = UDim2.fromOffset(0.5, 0.5),
+	--// TRUE CENTER
+	Position = UDim2.fromScale(0.5, 0.5),
 
 	--// Update
 	UpdateRate = 0.25,
@@ -106,16 +109,29 @@ local CONFIG = {
 
 	--// Layout
 	OuterPadding = 8,
+
 	HeaderHeight = 44,
 
-	CardWidth = 139,
-	CardHeight = 57,
-	CardGap = 7,
+	-- IMPORTANT:
+	-- Main inner width = 300 - 16 = 284
+	-- 138 + 8 + 138 = 284
+	CardWidth = 138,
+	CardHeight = 54,
+	CardGap = 8,
 
 	ContentTop = 56,
-	ContentBottomGap = 9,
 
-	FooterHeight = 24,
+	-- Cards:
+	-- Row 1: 56 -> 110
+	-- Gap: 8
+	-- Row 2: 118 -> 172
+	--
+	-- Footer:
+	-- Top: 180
+	-- Gap from cards: 8
+	ContentBottomGap = 8,
+
+	FooterHeight = 22,
 
 	--// Responsive
 	MobileScale = 0.84,
@@ -171,6 +187,7 @@ local CameraViewportConnection = nil
 local AnimationToken = 0
 
 local function disconnectConnection(connection)
+
 	if connection and connection.Connected then
 		connection:Disconnect()
 	end
@@ -183,7 +200,9 @@ local function addConnection(connection)
 	end
 
 	if State.Destroyed then
+
 		disconnectConnection(connection)
+
 		return nil
 	end
 
@@ -284,6 +303,7 @@ local function playTween(
 	stopTween(object)
 
 	local tween = TweenService:Create(
+
 		object,
 
 		TweenInfo.new(
@@ -411,6 +431,7 @@ local function createCorner(
 		Instance.new("UICorner")
 
 	corner.Name = "Corner"
+
 	corner.CornerRadius =
 		UDim.new(
 			0,
@@ -467,6 +488,7 @@ local function createLabel(
 		Instance.new("TextLabel")
 
 	label.Name = name
+
 	label.Size = size
 	label.Position = position
 
@@ -531,10 +553,12 @@ local function createButton(
 	button.BorderSizePixel = 0
 
 	button.Text = text
+
 	button.TextColor3 =
 		CONFIG.TextColor
 
 	button.TextSize = 14
+
 	button.Font =
 		Enum.Font.GothamBold
 
@@ -626,6 +650,14 @@ Main.Size =
 		CONFIG.Height
 	)
 
+-- IMPORTANT:
+-- Real screen center
+Main.AnchorPoint =
+	Vector2.new(
+		0.5,
+		0.5
+	)
+
 Main.Position =
 	CONFIG.Position
 
@@ -698,8 +730,8 @@ Header.BackgroundTransparency =
 	CONFIG.HeaderTransparency
 
 Header.BorderSizePixel = 0
-Header.ZIndex = 11
 
+Header.ZIndex = 11
 Header.Parent = Main
 
 createCorner(
@@ -895,10 +927,9 @@ LiveDot.BackgroundColor3 =
 	CONFIG.GoodColor
 
 LiveDot.BorderSizePixel = 0
-LiveDot.ZIndex = 14
 
-LiveDot.Parent =
-	Header
+LiveDot.ZIndex = 14
+LiveDot.Parent = Header
 
 createCorner(
 	LiveDot,
@@ -989,7 +1020,7 @@ Content.Size =
 		1,
 		-(CONFIG.OuterPadding * 2),
 		0,
-		CONFIG.CardHeight * 2
+		(CONFIG.CardHeight * 2)
 			+ CONFIG.CardGap
 	)
 
@@ -1098,11 +1129,11 @@ local function configureCardText(
 				1,
 				-20,
 				0,
-				28
+				29
 			),
 			UDim2.fromOffset(
 				10,
-				22
+				21
 			),
 			valueSize
 		)
@@ -1201,13 +1232,16 @@ Footer.Size =
 		CONFIG.FooterHeight
 	)
 
+-- Footer is deliberately separated from the card grid.
+-- This prevents NETWORK / PLAYERS from touching CONNECTED.
+
 Footer.Position =
 	UDim2.new(
 		0,
 		CONFIG.OuterPadding,
 		1,
-		-CONFIG.OuterPadding
-			- CONFIG.FooterHeight
+		-(CONFIG.OuterPadding
+			+ CONFIG.FooterHeight)
 	)
 
 Footer.BackgroundColor3 =
@@ -1245,8 +1279,8 @@ StatusDot.Size =
 
 StatusDot.Position =
 	UDim2.fromOffset(
-		8,
-		9
+		9,
+		8
 	)
 
 StatusDot.BackgroundColor3 =
@@ -1269,12 +1303,12 @@ local StatusText =
 		"CONNECTING...",
 		UDim2.new(
 			1,
-			-24,
+			-28,
 			1,
 			0
 		),
 		UDim2.fromOffset(
-			19,
+			20,
 			0
 		),
 		8
@@ -1302,6 +1336,12 @@ ReopenButton.Size =
 	UDim2.fromOffset(
 		44,
 		44
+	)
+
+ReopenButton.AnchorPoint =
+	Vector2.new(
+		0.5,
+		0.5
 	)
 
 ReopenButton.Position =
@@ -1550,10 +1590,12 @@ local function createConfirmButton(
 	button.BorderSizePixel = 0
 
 	button.Text = text
+
 	button.TextColor3 =
 		CONFIG.TextColor
 
 	button.TextSize = 10
+
 	button.Font =
 		Enum.Font.GothamBold
 
@@ -1601,18 +1643,22 @@ local function getPingState(
 )
 
 	if ping <= 50 then
+
 		return CONFIG.GoodColor,
 			"EXCELLENT"
 
 	elseif ping <= 100 then
+
 		return CONFIG.WarningColor,
 			"GOOD"
 
 	elseif ping <= 200 then
+
 		return CONFIG.HighColor,
 			"HIGH"
 
 	else
+
 		return CONFIG.BadColor,
 			"VERY HIGH"
 	end
@@ -1705,12 +1751,15 @@ local function getFPSColor(
 )
 
 	if fps >= 55 then
+
 		return CONFIG.GoodColor
 
 	elseif fps >= 30 then
+
 		return CONFIG.WarningColor
 
 	else
+
 		return CONFIG.BadColor
 	end
 end
@@ -2139,12 +2188,15 @@ local function getResponsiveScale(
 )
 
 	if width <= 380 then
+
 		return CONFIG.MobileScale
 
 	elseif width <= 500 then
+
 		return CONFIG.SmallScale
 
 	elseif width <= 800 then
+
 		return CONFIG.TabletScale
 	end
 
@@ -2167,6 +2219,48 @@ local function getRenderedMainSize()
 	)
 end
 
+--//==================================================
+--// CENTER-BASED POSITION SYSTEM
+--//==================================================
+
+local function getCenterFromPosition(
+	position
+)
+
+	local viewport =
+		getViewportSize()
+
+	return Vector2.new(
+
+		viewport.X
+			* position.X.Scale
+			+ position.X.Offset,
+
+		viewport.Y
+			* position.Y.Scale
+			+ position.Y.Offset
+	)
+end
+
+local function positionFromCenter(
+	center
+)
+
+	local viewport =
+		getViewportSize()
+
+	return UDim2.new(
+
+		0.5,
+		center.X
+			- viewport.X * 0.5,
+
+		0.5,
+		center.Y
+			- viewport.Y * 0.5
+	)
+end
+
 local function clampPosition(
 	position
 )
@@ -2183,37 +2277,60 @@ local function clampPosition(
 	local renderedSize =
 		getRenderedMainSize()
 
+	local halfWidth =
+		renderedSize.X * 0.5
+
+	local halfHeight =
+		renderedSize.Y * 0.5
+
 	local padding =
 		CONFIG.ScreenPadding
 
+	local minX =
+		padding + halfWidth
+
 	local maxX =
-		math.max(
-			padding,
-			viewport.X
-				- renderedSize.X
-				- padding
-		)
+		viewport.X
+			- padding
+			- halfWidth
+
+	local minY =
+		padding + halfHeight
 
 	local maxY =
-		math.max(
-			padding,
-			viewport.Y
-				- renderedSize.Y
-				- padding
+		viewport.Y
+			- padding
+			- halfHeight
+
+	local center =
+		getCenterFromPosition(
+			position
 		)
 
-	return UDim2.fromOffset(
-
+	local clampedX =
 		math.clamp(
-			position.X.Offset,
-			padding,
-			maxX
-		),
+			center.X,
+			minX,
+			math.max(
+				minX,
+				maxX
+			)
+		)
 
+	local clampedY =
 		math.clamp(
-			position.Y.Offset,
-			padding,
-			maxY
+			center.Y,
+			minY,
+			math.max(
+				minY,
+				maxY
+			)
+		)
+
+	return positionFromCenter(
+		Vector2.new(
+			clampedX,
+			clampedY
 		)
 	)
 end
@@ -2229,18 +2346,13 @@ local function clampCurrentPosition()
 			Main.Position
 		)
 
-	if Main.Position.X.Offset
-		~= clamped.X.Offset
-		or Main.Position.Y.Offset
-		~= clamped.Y.Offset then
-
-		Main.Position =
-			clamped
-	end
+	Main.Position =
+		clamped
 
 	if ReopenButton.Visible then
+
 		ReopenButton.Position =
-			Main.Position
+			clamped
 	end
 end
 
@@ -2316,7 +2428,9 @@ local function bindCamera(
 		camera
 
 	if not camera then
+
 		queueViewportUpdate()
+
 		return
 	end
 
@@ -2376,6 +2490,7 @@ local function beginDrag(
 	end
 
 	State.Dragging = true
+
 	State.DragStart =
 		input.Position
 
@@ -2404,11 +2519,13 @@ local function updateDrag(
 		- State.DragStart
 
 	local newPosition =
-		UDim2.fromOffset(
+		UDim2.new(
 
+			0.5,
 			State.StartPosition.X.Offset
 				+ delta.X,
 
+			0.5,
 			State.StartPosition.Y.Offset
 				+ delta.Y
 		)
@@ -2417,6 +2534,12 @@ local function updateDrag(
 		clampPosition(
 			newPosition
 		)
+
+	if ReopenButton.Visible then
+
+		ReopenButton.Position =
+			Main.Position
+	end
 end
 
 local function endDrag(
@@ -2436,6 +2559,7 @@ local function endDrag(
 		== Enum.UserInputType.Touch then
 
 		resetDragState()
+
 		clampCurrentPosition()
 	end
 end
@@ -2521,8 +2645,12 @@ local function setCollapsed(
 
 		Collapse.Text = "+"
 
-		Content.Visible = false
-		Footer.Visible = false
+		-- Keep them visible while shrinking.
+		-- Main.ClipsDescendants will naturally hide
+		-- content as the window gets smaller.
+
+		Content.Visible = true
+		Footer.Visible = true
 
 		local tween =
 			playTween(
@@ -2534,7 +2662,9 @@ local function setCollapsed(
 							CONFIG.CollapsedHeight
 						)
 				},
-				CONFIG.CollapseTweenTime
+				CONFIG.CollapseTweenTime,
+				Enum.EasingStyle.Quart,
+				Enum.EasingDirection.InOut
 			)
 
 		waitForTween(
@@ -2548,6 +2678,9 @@ local function setCollapsed(
 					return
 				end
 
+				Content.Visible = false
+				Footer.Visible = false
+
 				clampCurrentPosition()
 			end
 		)
@@ -2555,6 +2688,12 @@ local function setCollapsed(
 	else
 
 		Collapse.Text = "—"
+
+		-- Show content BEFORE expanding so the
+		-- dashboard grows naturally with its contents.
+
+		Content.Visible = true
+		Footer.Visible = true
 
 		local tween =
 			playTween(
@@ -2566,7 +2705,9 @@ local function setCollapsed(
 							CONFIG.Height
 						)
 				},
-				CONFIG.CollapseTweenTime
+				CONFIG.CollapseTweenTime,
+				Enum.EasingStyle.Quart,
+				Enum.EasingDirection.InOut
 			)
 
 		waitForTween(
@@ -2583,9 +2724,6 @@ local function setCollapsed(
 				if not ScreenGui.Parent then
 					return
 				end
-
-				Content.Visible = true
-				Footer.Visible = true
 
 				clampCurrentPosition()
 			end
@@ -2619,6 +2757,7 @@ local function showDashboard()
 		false
 
 	clampCurrentPosition()
+
 	queueViewportUpdate()
 end
 
@@ -2725,6 +2864,7 @@ connect(
 connect(
 	ReopenButton.Activated,
 	function()
+
 		showDashboard()
 	end
 )
@@ -2890,6 +3030,7 @@ end
 connect(
 	ScreenGui.Destroying,
 	function()
+
 		cleanup()
 	end
 )
@@ -2906,6 +3047,10 @@ updatePlayers()
 updateDashboard()
 updateScale()
 
+-- Force exact center on first render.
+-- This intentionally overrides any stale/invalid
+-- position and guarantees true screen centering.
+
 task.defer(
 	function()
 
@@ -2917,7 +3062,20 @@ task.defer(
 			return
 		end
 
-		clampCurrentPosition()
+		local viewport =
+			getViewportSize()
+
+		if viewport.X > 0
+			and viewport.Y > 0 then
+
+			Main.Position =
+				UDim2.fromScale(
+					0.5,
+					0.5
+				)
+
+			clampCurrentPosition()
+		end
 	end
 )
 
