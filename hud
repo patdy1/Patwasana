@@ -1,53 +1,6 @@
---[[
-    ================================================================
-    BOWKAO PLAYER PROFILE HUD V2
-    Production-Ready Roblox LocalScript
-    ================================================================
-
-    FEATURES
-    ----------------------------------------------------------------
-    • Modern Roblox-style profile HUD
-    • Rounded UI
-    • Player avatar
-    • Display Name
-    • Username
-    • Current local date
-    • Current local time
-    • Responsive scaling
-    • Safe avatar loading
-    • Connection cleanup
-    • Lightweight real-time clock
-    • Duplicate GUI protection
-    • Respawn safe
-
-    PERFORMANCE
-    ----------------------------------------------------------------
-    • No RenderStepped
-    • No Heartbeat
-    • No high-frequency loop
-    • Clock updates once per second
-    • Minimal UI instances
-    • Centralized cleanup
-
-    SAFETY
-    ----------------------------------------------------------------
-    • Does not modify Character
-    • Does not modify Humanoid
-    • Does not modify Tools
-    • Does not modify gameplay
-    ================================================================
-]]
-
-----------------------------------------------------------------
--- SERVICES
-----------------------------------------------------------------
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
-
-----------------------------------------------------------------
--- PLAYER
-----------------------------------------------------------------
 
 local Player = Players.LocalPlayer
 
@@ -57,27 +10,11 @@ end
 
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
-----------------------------------------------------------------
--- CONFIG
-----------------------------------------------------------------
-
 local CONFIG = {
-
-    ------------------------------------------------------------
-    -- GUI
-    ------------------------------------------------------------
-
     GuiName = "PlayerProfileHUD",
-
     DisplayOrder = 999999,
-
     Position = UDim2.fromOffset(10, 10),
-
     BaseSize = Vector2.new(164, 60),
-
-    ------------------------------------------------------------
-    -- RESPONSIVE
-    ------------------------------------------------------------
 
     ScaleSmall = 0.84,
     ScaleMedium = 0.92,
@@ -85,10 +22,6 @@ local CONFIG = {
 
     SmallViewportWidth = 380,
     MediumViewportWidth = 600,
-
-    ------------------------------------------------------------
-    -- COLORS
-    ------------------------------------------------------------
 
     BackgroundColor = Color3.fromRGB(35, 37, 39),
     BackgroundTransparency = 0.08,
@@ -105,348 +38,182 @@ local CONFIG = {
     MainTextColor = Color3.fromRGB(255, 255, 255),
     SecondaryTextColor = Color3.fromRGB(185, 185, 185),
 
-    ------------------------------------------------------------
-    -- BORDER
-    ------------------------------------------------------------
-
     MainCornerRadius = 9,
     PanelCornerRadius = 7,
     AvatarCornerRadius = 7,
-
     BorderThickness = 1,
-
-    ------------------------------------------------------------
-    -- AVATAR
-    ------------------------------------------------------------
 
     AvatarSize = 52,
     AvatarPadding = 4,
 
-    ------------------------------------------------------------
-    -- INFORMATION PANEL
-    ------------------------------------------------------------
-
     InfoX = 60,
     InfoPadding = 5,
 
-    ------------------------------------------------------------
-    -- TEXT
-    ------------------------------------------------------------
-
-    NameTextSize = 11,
-    UsernameTextSize = 9,
+    NameTextSize = 12,
+    UsernameTextSize = 10,
     DateTextSize = 9,
-    TimeTextSize = 9,
-
-    ------------------------------------------------------------
-    -- CLOCK
-    ------------------------------------------------------------
+    TimeTextSize = 10,
 
     ClockInterval = 1,
 }
 
-----------------------------------------------------------------
--- STATE
-----------------------------------------------------------------
-
 local State = {
-
     Destroyed = false,
-
     CurrentCamera = nil,
-
     CurrentScale = 1,
-
     ThumbnailLoaded = false,
 }
-
-----------------------------------------------------------------
--- CONNECTIONS
-----------------------------------------------------------------
 
 local Connections = {}
 
 local function Connect(signal, callback)
-
     if State.Destroyed then
         return nil
     end
 
     local connection = signal:Connect(callback)
-
     Connections[#Connections + 1] = connection
 
     return connection
 end
 
 local function DisconnectAll()
-
     for index = #Connections, 1, -1 do
-
         local connection = Connections[index]
 
         if connection then
-
             pcall(function()
                 connection:Disconnect()
             end)
-
         end
 
         Connections[index] = nil
     end
 end
 
-----------------------------------------------------------------
--- CLEANUP
-----------------------------------------------------------------
-
 local function Cleanup()
-
     if State.Destroyed then
         return
     end
 
     State.Destroyed = true
-
     DisconnectAll()
 end
-
-----------------------------------------------------------------
--- REMOVE OLD GUI
-----------------------------------------------------------------
 
 local OldGui = PlayerGui:FindFirstChild(CONFIG.GuiName)
 
 if OldGui then
-
     OldGui:Destroy()
-
 end
 
-----------------------------------------------------------------
--- SCREEN GUI
-----------------------------------------------------------------
-
 local Gui = Instance.new("ScreenGui")
-
 Gui.Name = CONFIG.GuiName
-
 Gui.ResetOnSpawn = false
-
 Gui.IgnoreGuiInset = false
-
 Gui.ZIndexBehavior = Enum.ZIndexBehavior.Global
-
 Gui.DisplayOrder = CONFIG.DisplayOrder
-
 Gui.Parent = PlayerGui
 
-----------------------------------------------------------------
--- GUI CLEANUP DETECTION
-----------------------------------------------------------------
-
-Connect(
-    Gui.Destroying,
-    function()
-
-        Cleanup()
-
-    end
-)
-
-----------------------------------------------------------------
--- ROUNDING HELPER
-----------------------------------------------------------------
+Connect(Gui.Destroying, function()
+    Cleanup()
+end)
 
 local function AddCorner(parent, radius)
-
     local corner = Instance.new("UICorner")
-
     corner.Name = "Corner"
-
     corner.CornerRadius = UDim.new(0, radius)
-
     corner.Parent = parent
 
     return corner
 end
 
-----------------------------------------------------------------
--- STROKE HELPER
-----------------------------------------------------------------
-
 local function AddStroke(parent)
-
     local stroke = Instance.new("UIStroke")
-
     stroke.Name = "Border"
-
     stroke.Color = CONFIG.BorderColor
-
     stroke.Transparency = CONFIG.BorderTransparency
-
     stroke.Thickness = CONFIG.BorderThickness
-
     stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-
     stroke.Parent = parent
 
     return stroke
 end
 
-----------------------------------------------------------------
--- MAIN FRAME
-----------------------------------------------------------------
-
 local Main = Instance.new("Frame")
-
 Main.Name = "Main"
-
 Main.Size = UDim2.fromOffset(
     CONFIG.BaseSize.X,
     CONFIG.BaseSize.Y
 )
-
 Main.Position = CONFIG.Position
-
 Main.BackgroundColor3 = CONFIG.BackgroundColor
-
 Main.BackgroundTransparency = CONFIG.BackgroundTransparency
-
 Main.BorderSizePixel = 0
-
 Main.ClipsDescendants = true
-
 Main.ZIndex = 10
-
 Main.Parent = Gui
 
-AddCorner(
-    Main,
-    CONFIG.MainCornerRadius
-)
-
+AddCorner(Main, CONFIG.MainCornerRadius)
 AddStroke(Main)
 
-----------------------------------------------------------------
--- SCALE
-----------------------------------------------------------------
-
 local UIScale = Instance.new("UIScale")
-
 UIScale.Name = "ResponsiveScale"
-
 UIScale.Scale = 1
-
 UIScale.Parent = Main
 
-----------------------------------------------------------------
--- AVATAR PANEL
-----------------------------------------------------------------
-
 local AvatarPanel = Instance.new("Frame")
-
 AvatarPanel.Name = "AvatarPanel"
-
 AvatarPanel.Size = UDim2.fromOffset(
     CONFIG.AvatarSize,
     CONFIG.AvatarSize
 )
-
 AvatarPanel.Position = UDim2.fromOffset(
     CONFIG.AvatarPadding,
     CONFIG.AvatarPadding
 )
-
 AvatarPanel.BackgroundColor3 = CONFIG.PanelColor
-
 AvatarPanel.BackgroundTransparency = CONFIG.PanelTransparency
-
 AvatarPanel.BorderSizePixel = 0
-
 AvatarPanel.ClipsDescendants = true
-
 AvatarPanel.ZIndex = 11
-
 AvatarPanel.Parent = Main
 
-AddCorner(
-    AvatarPanel,
-    CONFIG.PanelCornerRadius
-)
-
-----------------------------------------------------------------
--- AVATAR
-----------------------------------------------------------------
+AddCorner(AvatarPanel, CONFIG.PanelCornerRadius)
 
 local Profile = Instance.new("ImageLabel")
-
 Profile.Name = "Avatar"
-
 Profile.Size = UDim2.fromScale(1, 1)
-
 Profile.Position = UDim2.fromOffset(0, 0)
-
 Profile.BackgroundColor3 = CONFIG.DarkPanelColor
-
 Profile.BackgroundTransparency = CONFIG.DarkPanelTransparency
-
 Profile.BorderSizePixel = 0
-
 Profile.Image = ""
-
 Profile.ScaleType = Enum.ScaleType.Crop
-
 Profile.ZIndex = 12
-
 Profile.Parent = AvatarPanel
 
-AddCorner(
-    Profile,
-    CONFIG.AvatarCornerRadius
-)
-
-----------------------------------------------------------------
--- INFORMATION PANEL
-----------------------------------------------------------------
+AddCorner(Profile, CONFIG.AvatarCornerRadius)
 
 local Info = Instance.new("Frame")
-
 Info.Name = "Info"
-
 Info.Size = UDim2.new(
     1,
     -(CONFIG.InfoX + CONFIG.InfoPadding),
     1,
     -(CONFIG.InfoPadding * 2)
 )
-
 Info.Position = UDim2.fromOffset(
     CONFIG.InfoX,
     CONFIG.InfoPadding
 )
-
 Info.BackgroundColor3 = CONFIG.PanelColor
-
 Info.BackgroundTransparency = CONFIG.PanelTransparency
-
 Info.BorderSizePixel = 0
-
 Info.ClipsDescendants = true
-
 Info.ZIndex = 11
-
 Info.Parent = Main
 
-AddCorner(
-    Info,
-    CONFIG.PanelCornerRadius
-)
-
-----------------------------------------------------------------
--- TEXT CREATOR
-----------------------------------------------------------------
+AddCorner(Info, CONFIG.PanelCornerRadius)
 
 local function CreateText(
     name,
@@ -456,60 +223,32 @@ local function CreateText(
     color,
     font
 )
+    local label = Instance.new("TextLabel")
+    label.Name = name
+    label.Size = UDim2.new(1, -10, 0, height)
+    label.Position = UDim2.fromOffset(5, y)
+    label.BackgroundTransparency = 1
+    label.BorderSizePixel = 0
+    label.Text = ""
+    label.TextColor3 = color
+    label.TextTransparency = 0
+    label.Font = font or Enum.Font.Gotham
+    label.TextSize = textSize
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.TextYAlignment = Enum.TextYAlignment.Center
+    label.TextTruncate = Enum.TextTruncate.AtEnd
+    label.TextWrapped = false
+    label.RichText = false
+    label.ZIndex = 12
+    label.Parent = Info
 
-    local Label = Instance.new("TextLabel")
-
-    Label.Name = name
-
-    Label.Size = UDim2.new(
-        1,
-        -10,
-        0,
-        height
-    )
-
-    Label.Position = UDim2.fromOffset(
-        5,
-        y
-    )
-
-    Label.BackgroundTransparency = 1
-
-    Label.BorderSizePixel = 0
-
-    Label.Text = ""
-
-    Label.TextColor3 = color
-
-    Label.TextTransparency = 0
-
-    Label.Font = font or Enum.Font.Gotham
-
-    Label.TextSize = textSize
-
-    Label.TextXAlignment = Enum.TextXAlignment.Left
-
-    Label.TextYAlignment = Enum.TextYAlignment.Center
-
-    Label.TextTruncate = Enum.TextTruncate.AtEnd
-
-    Label.RichText = false
-
-    Label.ZIndex = 12
-
-    Label.Parent = Info
-
-    return Label
+    return label
 end
-
-----------------------------------------------------------------
--- TEXT ELEMENTS
-----------------------------------------------------------------
 
 local NameText = CreateText(
     "DisplayName",
-    1,
-    14,
+    0,
+    15,
     CONFIG.NameTextSize,
     CONFIG.MainTextColor,
     Enum.Font.GothamBold
@@ -518,296 +257,181 @@ local NameText = CreateText(
 local UsernameText = CreateText(
     "Username",
     15,
-    10,
+    11,
     CONFIG.UsernameTextSize,
-    CONFIG.SecondaryTextColor
+    CONFIG.SecondaryTextColor,
+    Enum.Font.GothamMedium
 )
 
 local DateText = CreateText(
     "Date",
-    25,
+    26,
     10,
     CONFIG.DateTextSize,
-    CONFIG.SecondaryTextColor
+    CONFIG.SecondaryTextColor,
+    Enum.Font.Gotham
 )
 
 local TimeText = CreateText(
     "Time",
-    35,
-    10,
+    36,
+    11,
     CONFIG.TimeTextSize,
-    CONFIG.SecondaryTextColor
+    CONFIG.SecondaryTextColor,
+    Enum.Font.GothamMedium
 )
 
-----------------------------------------------------------------
--- PLAYER DATA
-----------------------------------------------------------------
-
 local function UpdatePlayerData()
-
-    if State.Destroyed then
-        return
-    end
-
-    if not Player.Parent then
+    if State.Destroyed or not Player.Parent then
         return
     end
 
     NameText.Text = Player.DisplayName
-
     UsernameText.Text = "@" .. Player.Name
 end
 
-----------------------------------------------------------------
--- DATE / TIME
-----------------------------------------------------------------
-
 local function UpdateDateTime()
-
-    if State.Destroyed then
+    if State.Destroyed or not Gui.Parent then
         return
     end
 
-    if not Gui.Parent then
-        return
-    end
+    local timestamp = os.date("*t")
 
-    local Timestamp = os.date("*t")
-
-    if not Timestamp then
+    if not timestamp then
         return
     end
 
     DateText.Text = string.format(
         "%02d/%02d/%04d",
-        Timestamp.day,
-        Timestamp.month,
-        Timestamp.year
+        timestamp.day,
+        timestamp.month,
+        timestamp.year
     )
 
     TimeText.Text = string.format(
         "%02d:%02d:%02d",
-        Timestamp.hour,
-        Timestamp.min,
-        Timestamp.sec
+        timestamp.hour,
+        timestamp.min,
+        timestamp.sec
     )
 end
 
-----------------------------------------------------------------
--- AVATAR
-----------------------------------------------------------------
-
 local function LoadAvatar()
-
     if State.Destroyed then
         return
     end
 
     local success, image = pcall(function()
-
         return Players:GetUserThumbnailAsync(
             Player.UserId,
             Enum.ThumbnailType.HeadShot,
             Enum.ThumbnailSize.Size100x100
         )
-
     end)
 
-    if State.Destroyed then
-        return
-    end
-
-    if not Gui.Parent then
+    if State.Destroyed or not Gui.Parent then
         return
     end
 
     if success and image and image ~= "" then
-
         Profile.Image = image
-
         State.ThumbnailLoaded = true
-
     end
 end
 
-----------------------------------------------------------------
--- RESPONSIVE SCALE
-----------------------------------------------------------------
-
 local function GetResponsiveScale(viewportWidth)
-
     if viewportWidth <= CONFIG.SmallViewportWidth then
-
         return CONFIG.ScaleSmall
-
     elseif viewportWidth <= CONFIG.MediumViewportWidth then
-
         return CONFIG.ScaleMedium
-
     end
 
     return CONFIG.ScaleLarge
 end
 
-----------------------------------------------------------------
--- UPDATE RESPONSIVE SCALE
-----------------------------------------------------------------
-
 local function UpdateScale()
-
     if State.Destroyed then
         return
     end
 
-    local Camera = Workspace.CurrentCamera
+    local camera = Workspace.CurrentCamera
 
-    if not Camera then
+    if not camera then
         return
     end
 
-    State.CurrentCamera = Camera
+    State.CurrentCamera = camera
 
-    local ViewportSize = Camera.ViewportSize
+    local viewportSize = camera.ViewportSize
+    local newScale = GetResponsiveScale(viewportSize.X)
 
-    local NewScale = GetResponsiveScale(
-        ViewportSize.X
-    )
-
-    if math.abs(NewScale - State.CurrentScale) < 0.001 then
+    if math.abs(newScale - State.CurrentScale) < 0.001 then
         return
     end
 
-    State.CurrentScale = NewScale
-
-    UIScale.Scale = NewScale
+    State.CurrentScale = newScale
+    UIScale.Scale = newScale
 end
 
-----------------------------------------------------------------
--- CAMERA BINDING
-----------------------------------------------------------------
+local CameraViewportConnection
 
-local CameraViewportConnection = nil
-
-local function BindCamera(Camera)
-
+local function BindCamera(camera)
     if CameraViewportConnection then
-
-        pcall(function()
-            CameraViewportConnection:Disconnect()
-        end)
-
+        CameraViewportConnection:Disconnect()
         CameraViewportConnection = nil
     end
 
-    State.CurrentCamera = Camera
+    State.CurrentCamera = camera
 
-    if not Camera then
+    if not camera then
         return
     end
 
-    CameraViewportConnection =
-        Camera:GetPropertyChangedSignal("ViewportSize"):Connect(
-            function()
-
-                UpdateScale()
-
-            end
-        )
+    CameraViewportConnection = Connect(
+        camera:GetPropertyChangedSignal("ViewportSize"),
+        UpdateScale
+    )
 
     UpdateScale()
 end
 
-----------------------------------------------------------------
--- CAMERA CHANGE
-----------------------------------------------------------------
-
 Connect(
     Workspace:GetPropertyChangedSignal("CurrentCamera"),
     function()
-
-        BindCamera(
-            Workspace.CurrentCamera
-        )
-
+        BindCamera(Workspace.CurrentCamera)
     end
 )
 
-----------------------------------------------------------------
--- INITIAL CAMERA
-----------------------------------------------------------------
-
-BindCamera(
-    Workspace.CurrentCamera
-)
-
-----------------------------------------------------------------
--- PLAYER DATA INITIAL
-----------------------------------------------------------------
+BindCamera(Workspace.CurrentCamera)
 
 UpdatePlayerData()
-
 UpdateDateTime()
-
-----------------------------------------------------------------
--- PLAYER DISPLAY NAME CHANGE
-----------------------------------------------------------------
 
 Connect(
     Player:GetPropertyChangedSignal("DisplayName"),
-    function()
-
-        UpdatePlayerData()
-
-    end
+    UpdatePlayerData
 )
-
-----------------------------------------------------------------
--- CLOCK LOOP
-----------------------------------------------------------------
-
-task.spawn(function()
-
-    while not State.Destroyed
-        and Gui.Parent
-    do
-
-        UpdateDateTime()
-
-        task.wait(CONFIG.ClockInterval)
-
-    end
-
-end)
-
-----------------------------------------------------------------
--- AVATAR LOADING
-----------------------------------------------------------------
-
-task.spawn(function()
-
-    LoadAvatar()
-
-end)
-
-----------------------------------------------------------------
--- FINAL SAFETY
-----------------------------------------------------------------
 
 Connect(
-    Player.AncestryChanged,
-    function(_, parent)
-
-        if not parent then
-
-            Cleanup()
-
-        end
-
-    end
+    Player:GetPropertyChangedSignal("Name"),
+    UpdatePlayerData
 )
 
-----------------------------------------------------------------
--- READY
-----------------------------------------------------------------
+task.spawn(function()
+    while not State.Destroyed and Gui.Parent do
+        UpdateDateTime()
+        task.wait(CONFIG.ClockInterval)
+    end
+end)
+
+task.spawn(function()
+    LoadAvatar()
+end)
+
+Connect(Player.AncestryChanged, function(_, parent)
+    if not parent then
+        Cleanup()
+    end
+end)
 
 print("[PlayerProfileHUD V2] Initialized")
